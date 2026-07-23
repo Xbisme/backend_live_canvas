@@ -1,0 +1,3 @@
+# Production dependencies (prod flavor). Compile with:
+# uv pip compile requirements/prod.in -o requirements/prod.txt
+-r base.in

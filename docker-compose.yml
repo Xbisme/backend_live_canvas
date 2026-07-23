@@ -1,0 +1,22 @@
+# Local development services for the dev flavor.
+# Only Postgres is provisioned here — Redis/cache/queue is deferred to BE-004
+# (async media pipeline). Start with: docker compose up -d db
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: livecanvas
+      POSTGRES_PASSWORD: livecanvas
+      POSTGRES_DB: livecanvas
+    ports:
+      - "5432:5432"
+    volumes:
+      - livecanvas_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U livecanvas -d livecanvas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  livecanvas_pgdata:
