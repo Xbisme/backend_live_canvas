@@ -25,6 +25,7 @@
 | 11 | **Admin: Upload Wallpaper** | Danh sách category + tag có sẵn để chọn | Chọn file, chọn category, chọn tag (curated — không gõ tự do), submit | `GET /admin/tags` hoặc `GET /tags`, `POST /admin/uploads/presign`, `POST /admin/wallpapers` |
 | 12 | **Admin: Quản lý Tag** | Danh sách tag + số wallpaper đang dùng mỗi tag | Tạo tag mới, xóa tag không dùng | `GET /admin/tags`, `POST /admin/tags`, `DELETE /admin/tags/{id}` |
 | 13 | **Admin: Quản lý Bộ sưu tập** | Danh sách collection + wallpaper thuộc mỗi bộ (curated) | Tạo/sửa collection (title, cover, author, description, is_premium), thêm/bớt/sắp xếp wallpaper, xóa | `GET/POST/PATCH/DELETE /admin/collections`, `POST /admin/uploads/presign` (cover) |
+| 14 | **Admin: Đăng nhập** (admin tooling — không phải màn hình app end-user) | Form username/password của staff account; phiên làm việc cần token ngắn hạn tự gia hạn | Đăng nhập → nhận access (30') + refresh (7 ngày, rotate); mọi màn admin #11–13 gắn `Authorization: Bearer <access>`; hết hạn → refresh tự động, refresh hết hạn → đăng nhập lại | `POST /admin/auth/login`, `POST /admin/auth/refresh` |
 
 ## Quyết định đã chốt (ảnh hưởng trực tiếp tới response schema)
 
@@ -38,6 +39,9 @@
   - `GET /collections/{id}` trả meta + **nhúng thẳng `items: Wallpaper[]`** đúng thứ tự curate, **KHÔNG phân trang** (tập bounded, soft-cap ≤100 wallpaper/bộ). Lý do: màn Collection Detail render cả grid 1 lần, không cần cursor.
   - **"Tải tất cả"**: không có endpoint riêng — client lặp gọi `GET /wallpapers/{id}/download-url` cho từng item. **Entitlement vẫn quyết duy nhất ở `download-url`** (kể cả bộ premium): cover/detail chỉ hiển thị nút "Mở khoá" theo `collection.is_premium`, gate thật vẫn ở download-url từng file.
   - `Wallpaper` thêm field `collections: CollectionRef[]` (mini: id/slug/title/cover_url/is_premium) để Detail nhảy vào bộ. Chỉ đảm bảo populate ở `GET /wallpapers/{id}`; ở list lớn có thể rỗng để tiết kiệm payload (client Detail luôn có dữ liệu cần).
+
+- **Admin auth (v0.4.0)**: các màn admin #11–13 xác thực bằng **Bearer JWT** (access 30 phút / refresh 7 ngày rotate) đổi từ credential staff qua `POST /admin/auth/login` — tách tuyệt đối khỏi `X-App-Key` của app end-user. Backend không thêm hệ thống user mới: tài khoản admin là Django staff user sẵn có.
+- **Download thật (v0.4.0)**: `GET /wallpapers/{id}/download-url` từ v0.4.0 trả **presigned URL thật** (hết hạn ≤5 phút) cho wallpaper free thay vì mock; premium tiếp tục `402` cho tới khi IAP verify (BE-005). Lưu ý client: domain của `download_url` (S3/R2 endpoint) **khác** domain thumbnail/preview (CDN) — không hardcode/so sánh domain.
 
 ## Giả định chưa xác nhận (cần bạn confirm trước khi implement)
 

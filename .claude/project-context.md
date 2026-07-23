@@ -3,14 +3,14 @@
 > Repo: `livecanvas-backend` (Django + DRF)
 > Repo liên quan: `livecanvas-mobile` (Flutter, độc lập hoàn toàn — đồng bộ qua `contracts/openapi.yaml` + `.claude/api-context.md`, copy tay giữa 2 repo)
 >
-> Last updated: 2026-07-23 (BE-001 + BE-002 đã merge · contract v0.3.2 — thẻ ảo "All" ở /tags · đang plan BE-003 Core Content API)
+> Last updated: 2026-07-23 (BE-001→003 merged · **BE-004 implemented** trên branch `BE-004-admin-upload-pipeline` · contract **v0.4.0** · ✅ đã sync mobile 2026-07-23)
 > **Mục đích**: Snapshot tối thiểu để bắt đầu 1 session làm việc trên repo backend.
 >
 > **Đọc file nào khi nào**:
 > - Bắt đầu session mới → file này + `docs/PRD.md` + `CLAUDE.md` (khi có).
 > - Chuẩn bị họp spec mới → file này + [`sdd-roadmap.md`](sdd-roadmap.md).
 > - **Trước khi đổi/thêm bất kỳ API nào** → [`../docs/screen-inventory.md`](../docs/screen-inventory.md) TRƯỚC TIÊN (màn hình cần gì quyết định API, không phải ngược lại), rồi mới tới `api-context.md`.
-> - Cần biết chi tiết từng endpoint (header/body/response) → [`api-context.md`](api-context.md) + [`openapi.yaml`](openapi.yaml) — **contract version hiện tại: `v0.3.2`**.
+> - Cần biết chi tiết từng endpoint (header/body/response) → [`api-context.md`](api-context.md) + [`openapi.yaml`](openapi.yaml) — **contract version hiện tại: `v0.4.0`**.
 > - Cần hiểu vì sao spec X ra đời → [`decisions/`](decisions/).
 > - Cần biết spec nào ship khi nào → [`changelog.md`](changelog.md).
 
@@ -24,21 +24,21 @@
 
 ## Current Focus
 
-- **Trạng thái**: BE-001 (bootstrap 2-flavor + constitution) và BE-002 (foundation: DRF, app skeleton, X-App-Key gate, error envelope, storage config) đã merge vào `main`.
+- **Trạng thái**: BE-001→BE-003 đã merge vào `main`. **BE-004 đã implement đầy đủ** trên branch `BE-004-admin-upload-pipeline` (SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; toàn bộ tests xanh) — chờ quickstart end-to-end + review/merge.
 - **Đã có sẵn**:
-  - `docs/screen-inventory.md` — danh sách màn hình + data cần, làm nền cho contract (đã review, 1 giả định còn treo: Onboarding không cần data riêng).
-  - `.claude/openapi.yaml` v0.3.2 + `.claude/api-context.md` v0.3.2 — cursor-based pagination, resource `Tag` curated (+ **thẻ ảo "All"** id=0/slug=all ở đầu `GET /tags`, reserved slug), `POST /wallpapers/batch` cho Favorites, resource `Collection` curated (bộ sưu tập có thứ tự) + `GET /collections`, `GET /collections/{id}`, admin `/admin/collections`; error code `SERVER_ERROR`, `METHOD_NOT_ALLOWED`.
-  - ⚠️ **Chưa sync sang `livecanvas-mobile`**: contract v0.3.2 (openapi.yaml + api-context.md + screen-inventory.md) cần copy nguyên văn sang repo mobile (Contract Sync).
-  - `core/` — api (`AppTierAPIView`), authentication (`AppKeyAuthentication`), errors (catalog), exception_handler, pagination (cursor envelope), permissions, urls, views. Apps `wallpapers|uploads|iap` mới có `apps.py` + `migrations/`, **chưa có model nghiệp vụ**.
-- **Spec tiếp theo**: `BE-003-core-content-api` — models `Category`/`Tag`/`Wallpaper`/`Collection` + public content API (list/detail/filter/search, cursor pagination), admin `/admin/tags`, seed script, `download-url` mock/`501` tạm. ⚠️ Điểm đồng bộ với repo mobile (MO-002).
+  - Catalog thật: **397 wallpaper Pexels** (dataset local ~22.4 GB tại `~/Documents/database/crawl_script/livewallpapers`; metadata commit ở `data/crawl/`; fixture sinh bởi `scripts/build_seed_fixture.py` → `manage.py seed_content`). 5 categories / 21 curated tags / 83 premium / 5 collections.
+  - Contract **v0.4.0** (`.claude/openapi.yaml` + `api-context.md`): + `POST /admin/auth/login|refresh` (JWT access 30'/refresh 7d rotate), download-url presigned thật ≤5' cho free (premium 402 tới BE-005), 422 FILE_REJECTED đồng bộ khi >500MB, bỏ server Staging.
+  - BE-004 stack: admin tier (`AdminTierAPIView`/`AdminJWTAuthentication`/`IsAdminStaff` trong `core`), storage 2 vùng (bucket private staging+masters / public thumbs+previews+covers; MinIO dev qua docker-compose, R2 prod), pipeline Celery+Redis (magic-byte sniff → H.264 normalize → thumbnail → preview 720p watermark; state machine processing→published|failed, idempotent theo `master_key`), admin CRUD wallpapers/tags/collections + app `apps/audit` (append-only, sanitize guard), `backfill_media` + `purge_stale_uploads`.
+  - ✅ **Đã sync `livecanvas-mobile`** (2026-07-23): contract v0.4.0 copy nguyên văn (openapi.yaml → `.claude/` + `contracts/`, api-context.md, screen-inventory.md) + ghi chú vào changelog mobile. Mobile cần regenerate `packages/livecanvas_api` và chuyển mock → API thật (MO-002).
+- **Việc còn treo của BE-004**: (1) chạy nốt `backfill_media` full 397 (đã verify 3 item thật end-to-end; resumable); (2) tạo bucket R2 + CDN khi lên prod.
+- **Spec tiếp theo**: `BE-005-iap-verify-entitlement` — verify-receipt, webhook Apple/Google, mở gate entitlement thật ở download-url.
 - **Quyết định kỹ thuật đã chốt** (ảnh hưởng schema DB):
   - Pagination: cursor-based (keyset), không dùng offset `page`/`page_size`.
   - Tag: curated — model `Tag` many-to-many với `Wallpaper`, admin chỉ chọn `tag_ids` có sẵn khi upload, tạo tag mới qua endpoint riêng `/admin/tags`.
   - Collection (bộ sưu tập): curated — many-to-many **có thứ tự** với `Wallpaper` (bảng nối lưu `position`); `GET /collections` không phân trang, `GET /collections/{id}` nhúng `items` đúng thứ tự; entitlement bộ premium vẫn quyết ở `download-url` từng file ("Tải tất cả" = client lặp gọi download-url).
+- **Đã chốt thêm (BE-004)**: storage = **Cloudflare R2** (egress free) + MinIO dev, mô hình 2 bucket public/private; admin JWT = simplejwt (login endpoint, access 30'/refresh 7d rotate); master H.264 giữ resolution; preview 720p watermark 10s; trần upload 500 MB; ClamAV hoãn BE-006 (deviation có phê duyệt).
 - **Chưa quyết định**:
-  - Tên sản phẩm thật + domain API production.
-  - Nhà cung cấp S3-compatible (AWS S3 / Cloudflare R2 / DO Spaces) + CDN đi kèm.
-  - Danh sách wallpaper seed ban đầu (Pixabay/Pexels/Mixkit) — cần trước `BE-003`.
+  - Tên sản phẩm thật + domain API production (+ tài khoản Cloudflare/R2 bucket thật).
   - Có cần mục "Nổi bật/Trending" riêng (field `is_featured`) không — hiện Onboarding đang giả định mở thẳng vào Browse mặc định.
 
 ## Repo Layout

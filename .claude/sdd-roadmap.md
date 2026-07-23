@@ -4,7 +4,7 @@
 >
 > **Vai trò file này**: pure planning cho track backend. Trạng thái hiện tại → [`project-context.md`](project-context.md). Ship history → [`changelog.md`](changelog.md).
 >
-> Last updated: 2026-07-23 (BE-001 + BE-002 đã merge vào `main` · contract v0.3.2 — thêm thẻ ảo "All" ở `GET /tags` · đang plan BE-003 Core Content API)
+> Last updated: 2026-07-23 (BE-001→BE-003 đã merge · contract **v0.4.0** — admin auth + download-url thật · **BE-004 đã implement trên branch `BE-004-admin-upload-pipeline`**, chờ review/merge; Contract Sync v0.4.0 → mobile ✅ 2026-07-23)
 > Full requirements: `docs/PRD.md`
 >
 > **Quy ước flavor**: Toàn repo **chỉ có đúng 2 flavor**: `dev` và `prod` (production). KHÔNG có `staging` hay bất kỳ flavor nào khác. Mọi settings/env/CI/deploy đều bám theo đúng 2 flavor này.
@@ -103,7 +103,7 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-003: Core Content API
 
-- **Status**: 🔵 Next up (chưa tạo branch/spec)
+- **Status**: ✅ Merged (PR #3) — models + public content API + seed **397 wallpaper thật** (dataset Pexels crawl, fixture sinh từ `data/crawl/` qua `scripts/build_seed_fixture.py`; 5 categories, 21 curated tags, 83 premium, 5 collections). Còn nợ T032 Contract Sync sang mobile (gộp vào sync v0.4.0).
 - **Branch**: `BE-003-core-content-api`
 - **Depends on**: BE-002
 - **Scope**: Model `Category`/`Tag`/`Wallpaper`/`Collection` (many-to-many Wallpaper↔Tag; many-to-many **có thứ tự** Collection↔Wallpaper qua bảng nối `position`) đúng `openapi.yaml`; `GET /categories`, `GET /tags`, `GET /wallpapers` (cursor pagination), `GET /wallpapers/{id}` (populate `collections`), `POST /wallpapers/batch`; `GET /collections` (không phân trang), `GET /collections/{id}` (nhúng `items` đúng thứ tự); `POST/GET/DELETE /admin/tags` (curated tag management); seed script Pixabay/Pexels/Mixkit (lưu `source_url`, `license_type`); `download-url` trả mock/`501` tạm — hoàn thiện thật ở BE-004.
@@ -111,10 +111,11 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-004: Admin Upload Pipeline
 
-- **Status**: ⬜ Not started
+- **Status**: 🟢 Implemented trên branch `BE-004-admin-upload-pipeline` (spec→clarify→plan→tasks→analyze→implement xong; 127+ tests xanh) — chờ chạy quickstart end-to-end + review/merge
 - **Branch**: `BE-004-admin-upload-pipeline`
 - **Depends on**: BE-003
-- **Scope**: `POST /admin/uploads/presign`, `POST /admin/wallpapers` (validate `tag_ids` tồn tại → `TAG_NOT_FOUND` nếu sai), `GET/DELETE /admin/wallpapers` (cursor pagination); `POST/GET/PATCH/DELETE /admin/collections` (curated collection management — validate `wallpaper_ids` tồn tại → `WALLPAPER_NOT_FOUND`, `slug` trùng → `COLLECTION_SLUG_CONFLICT`, cover ảnh qua presign → `cover_upload_key`, `wallpaper_ids` giữ thứ tự); Celery worker (validate MIME thật, scan malware ClamAV, transcode ffmpeg, thumbnail + preview watermark); `AdminBearer` JWT riêng; audit log.
+- **Đã ship**: contract **v0.4.0** (`/admin/auth/login|refresh`, download-url thật, 422 semantics); admin JWT tier (simplejwt, access 30'/refresh 7d rotate, `AdminTierAPIView`); storage 2 vùng (private staging+masters / public thumbs+previews+covers — MinIO dev, R2 prod); pipeline Celery+Redis (sniff magic-bytes → H.264 normalize → thumbnail → preview 720p watermark, state machine processing→published|failed); admin CRUD wallpapers/tags/collections (curated integrity đủ mã lỗi); app mới `apps/audit` (append-only + sanitize guard); `backfill_media` (idempotent, resumable) + `purge_stale_uploads`; download-url presigned ≤5' cho free (premium 402 tới BE-005). **ClamAV hoãn sang BE-006** (deviation Constitution VII, đã justify trong plan).
+- **Còn lại**: chạy nốt backfill full (3/397 đã verify thật); Contract Sync v0.4.0 → mobile ✅ 2026-07-23.
 
 ### BE-005: IAP Verify & Entitlement
 

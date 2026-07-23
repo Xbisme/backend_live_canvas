@@ -7,10 +7,8 @@ edge (real entitlement + presigning land in BE-005).
 
 from datetime import timedelta
 
-from django.conf import settings
 from django.db.models import Count, Q, QuerySet
 from django.http import Http404
-from django.utils import timezone
 
 from apps.wallpapers.models import (
     RESERVED_TAG_SLUGS,
@@ -153,18 +151,20 @@ def batch_wallpapers(ids: list) -> QuerySet:
 
 
 def build_download_url(wallpaper: Wallpaper) -> dict:
-    """Temporary download-url edge (spec FR-012).
+    """The download edge — real presigned link as of v0.4.0 (spec FR-018, Constitution III).
 
-    Non-premium → a mock URL shaped like the contract; premium → ``ENTITLEMENT_REQUIRED`` (there is
-    no transaction verification until BE-005, so premium is never entitled here). Constitution III
-    keeps the gate at this single edge.
+    Premium → ``ENTITLEMENT_REQUIRED`` unconditionally (verification arrives in BE-005 —
+    safe by default, no interim bypass). Free → a short-lived (≤ 5 min) single-object
+    presigned GET on the private master. A published wallpaper without a self-hosted
+    master yet (seeded, pre-backfill) has no downloadable bytes → 404. The presigned URL
+    must never be logged (Constitution XI).
     """
     if wallpaper.is_premium:
         raise EntitlementRequired()
+    if not wallpaper.master_key:
+        raise Http404
 
-    cdn = (settings.CDN_BASE_URL or "").rstrip("/")
-    download_url = f"{cdn}/wallpapers/{wallpaper.pk}.mp4?mock=1" if cdn else wallpaper.source_url
-    return {
-        "download_url": download_url,
-        "expires_at": timezone.now() + DOWNLOAD_URL_TTL,
-    }
+    from apps.uploads import storage  # public uploads-domain surface (Constitution V)
+
+    url, expires_at = storage.presign_download(wallpaper.master_key)
+    return {"download_url": url, "expires_at": expires_at}

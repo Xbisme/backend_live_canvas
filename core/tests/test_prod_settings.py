@@ -25,6 +25,8 @@ _VALID_ENV = {
     "AWS_ACCESS_KEY_ID": "AKIA_TEST",
     "AWS_SECRET_ACCESS_KEY": "secret-test",
     "CDN_BASE_URL": "https://cdn.example.com",
+    "AWS_PUBLIC_BUCKET_NAME": "livecanvas-public",
+    "CELERY_BROKER_URL": "redis://localhost:6379/0",
 }
 
 # Dump the security-relevant settings as JSON so the parent can assert on them.

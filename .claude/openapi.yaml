@@ -10,13 +10,20 @@ info:
     v0.3.1 (BE-002): thêm 2 error code nền tảng cho centralized exception handler —
     `SERVER_ERROR` (500) và `METHOD_NOT_ALLOWED` (405). ErrorResponse.code là chuỗi
     tự do nên schema không đổi; danh mục đầy đủ ở .claude/api-context.md.
-  version: "0.3.2"
+
+    v0.4.0 (BE-004): thêm admin auth surface — `POST /admin/auth/login` +
+    `POST /admin/auth/refresh` (JWT access 30 phút / refresh 7 ngày, rotate).
+    `GET /wallpapers/{id}/download-url` hết mock: free → presigned URL thật hết hạn
+    ≤5 phút (domain S3/R2, KHÁC domain CDN của thumbnail/preview — client không được
+    so sánh/hardcode domain); premium giữ 402 tới BE-005. `POST /admin/wallpapers`:
+    422 FILE_REJECTED bắn đồng bộ khi file vượt 500 MB (HEAD check); lỗi nội dung
+    file surface bất đồng bộ qua wallpaper.status=failed. Không error code mới.
+    Bỏ server "Staging" khỏi contract (kỷ luật 2-flavor dev/prod).
+  version: "0.4.0"
 
 servers:
   - url: https://api.example.com/v1
     description: Production
-  - url: https://staging-api.example.com/v1
-    description: Staging
 
 tags:
   - name: Public
@@ -310,6 +317,26 @@ components:
         upload_key: { type: string }
         expires_at: { type: string, format: date-time }
 
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+
+    AdminRefreshRequest:
+      type: object
+      required: [refresh]
+      properties:
+        refresh: { type: string, description: Refresh token còn hạn (chưa bị rotate/blacklist) }
+
+    AdminTokenResponse:
+      type: object
+      properties:
+        access: { type: string, description: JWT access — gắn `Authorization Bearer` cho /admin/*, sống 30 phút }
+        refresh: { type: string, description: Refresh token MỚI (rotate mỗi lần dùng; bản cũ bị vô hiệu), sống 7 ngày }
+        expires_in: { type: integer, example: 1800, description: Số giây còn lại của access token }
+
 paths:
   /categories:
     get:
@@ -448,6 +475,10 @@ paths:
   /wallpapers/{id}/download-url:
     get:
       tags: [Public]
+      summary: >
+        Presigned URL thật (v0.4.0) — hết hạn ≤5 phút, chỉ 1 object. Domain là S3/R2
+        endpoint, KHÁC domain CDN của thumbnail/preview. Premium → 402 vô điều kiện
+        cho tới BE-005. Wallpaper đang processing/failed/đã xóa → 404.
       parameters:
         - name: id
           in: path
@@ -535,6 +566,55 @@ paths:
         '200':
           description: Đã nhận và xử lý
 
+  /admin/auth/login:
+    post:
+      tags: [Admin]
+      security: []
+      summary: Đổi credential Django staff user lấy cặp JWT admin (access 30' / refresh 7d)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminLoginRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminTokenResponse' }
+        '401':
+          description: Sai username/password → UNAUTHORIZED_ADMIN
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Đúng credential nhưng không phải staff / tài khoản bị khoá → FORBIDDEN_ADMIN_ROLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /admin/auth/refresh:
+    post:
+      tags: [Admin]
+      security: []
+      summary: Rotate refresh token — trả access + refresh MỚI, refresh cũ bị blacklist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminRefreshRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminTokenResponse' }
+        '401':
+          description: Refresh hết hạn / đã rotate / blacklist → UNAUTHORIZED_ADMIN
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
   /admin/uploads/presign:
     post:
       tags: [Admin]
@@ -568,9 +648,15 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Wallpaper' }
         '400':
-          description: Dữ liệu không hợp lệ, hoặc tag_ids chứa ID không tồn tại
+          description: >
+            Dữ liệu không hợp lệ, tag_ids chứa ID không tồn tại, upload_key đã dùng,
+            hoặc object chưa được upload lên storage
         '422':
-          description: File không qua được kiểm tra (sai định dạng/nhiễm mã độc)
+          description: >
+            FILE_REJECTED — bắn ĐỒNG BỘ tại register khi HEAD thấy file vượt 500 MB.
+            Lỗi nội dung file (sai định dạng thật; malware scan từ BE-006) được phát
+            hiện bất đồng bộ trong pipeline → wallpaper.status=failed (quan sát qua
+            GET /admin/wallpapers?status=failed), KHÔNG trả 422 lúc đó.
     get:
       tags: [Admin]
       security: [{ AdminBearer: [] }]

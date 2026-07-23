@@ -1,10 +1,17 @@
-"""Placeholder for the Celery application (BE-004).
+"""Celery application for the async media pipeline (BE-004, Constitution VII).
 
-Intentionally empty in BE-001. The async media pipeline — Celery app, broker
-(Redis), tasks, and worker configuration — is deferred to BE-004 per the spec
-(FR-017). Keeping this module as a reserved placeholder means BE-004 can add the
-Celery wiring here without restructuring the project package.
-
-Do NOT import this module at runtime yet: `celery` is not a dependency until BE-004,
-and the web service does not require a broker to run.
+The worker runs the same codebase as the API (``celery -A config worker``). Task
+outcome is reflected in ``Wallpaper.status`` — deliberately no result backend
+(research D2). Broker URL comes from the flavor env (``CELERY_BROKER_URL``).
 """
+
+import os
+
+from celery import Celery
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
+
+app = Celery("config")
+# All Celery settings live in Django settings under the CELERY_ prefix.
+app.config_from_object("django.conf:settings", namespace="CELERY")
+app.autodiscover_tasks()

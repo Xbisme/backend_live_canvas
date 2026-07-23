@@ -8,8 +8,8 @@ boundary is declared in exactly one place and never leaks onto the admin tier
 
 from rest_framework.views import APIView
 
-from core.authentication import AppKeyAuthentication
-from core.permissions import IsAppAuthenticated
+from core.authentication import AdminJWTAuthentication, AppKeyAuthentication
+from core.permissions import IsAdminStaff, IsAppAuthenticated
 
 
 class AppTierAPIView(APIView):
@@ -17,3 +17,15 @@ class AppTierAPIView(APIView):
 
     authentication_classes = [AppKeyAuthentication]
     permission_classes = [IsAppAuthenticated]
+
+
+class AdminTierAPIView(APIView):
+    """Base view for the ``/admin/*`` tier — requires a Bearer admin JWT of a staff user.
+
+    Strictly symmetric with ``AppTierAPIView`` and never mixed with it: an ``X-App-Key``
+    is meaningless here and an admin JWT is meaningless on the app tier (Constitution II —
+    no fallback in either direction).
+    """
+
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [IsAdminStaff]

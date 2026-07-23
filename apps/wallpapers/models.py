@@ -42,7 +42,7 @@ class Category(models.Model):
 
     slug = models.SlugField(unique=True)
     name = models.CharField(max_length=120)
-    icon_url = models.URLField(blank=True)
+    icon_url = models.URLField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -83,8 +83,9 @@ class Wallpaper(models.Model):
 
     # Media-derived fields — the contract models these as JSON ``null`` while processing
     # (BE-004 pipeline), so a real NULL is intentional here (not the usual blank="" convention).
-    thumbnail_url = models.URLField(null=True, blank=True)  # noqa: DJ001 — contract-nullable
-    preview_video_url = models.URLField(null=True, blank=True)  # noqa: DJ001 — contract-nullable
+    # max_length=500: real-world CDN/source URLs (e.g. Pexels page slugs) exceed the 200 default.
+    thumbnail_url = models.URLField(max_length=500, null=True, blank=True)  # noqa: DJ001 — contract-nullable
+    preview_video_url = models.URLField(max_length=500, null=True, blank=True)  # noqa: DJ001 — contract-nullable
     resolution = models.CharField(max_length=20, null=True, blank=True)  # noqa: DJ001 — contract-nullable
     duration_seconds = models.FloatField(null=True, blank=True)
     file_size_bytes = models.BigIntegerField(null=True, blank=True)
@@ -94,8 +95,20 @@ class Wallpaper(models.Model):
     like_count = models.PositiveIntegerField(default=0)
 
     # Provenance / license — required for source-terms compliance (spec FR-004).
-    source_url = models.URLField()
+    source_url = models.URLField(max_length=500)
     license_type = models.CharField(max_length=120)
+
+    # Storage keys (BE-004 pipeline, data-model §1). masters/* live in the PRIVATE zone
+    # (non-guessable uuid keys, presigned-only — Constitution III); thumbs/previews in
+    # the PUBLIC zone (their URLs mirror into thumbnail_url/preview_video_url).
+    # master_key IS NULL ⇔ no self-hosted file yet (backfill's resume condition).
+    master_key = models.CharField(max_length=255, null=True, blank=True)  # noqa: DJ001 — null = not yet processed
+    staging_key = models.CharField(max_length=255, null=True, blank=True)  # noqa: DJ001 — kept while processing/failed for retry
+    thumbnail_key = models.CharField(max_length=255, null=True, blank=True)  # noqa: DJ001
+    preview_key = models.CharField(max_length=255, null=True, blank=True)  # noqa: DJ001
+    # Why a run failed (truncated ffmpeg stderr / sniff verdict). Admin tier only —
+    # never serialized on the public tier.
+    failure_reason = models.TextField(null=True, blank=True)  # noqa: DJ001
 
     status = models.CharField(
         max_length=12, choices=WallpaperStatus.choices, default=WallpaperStatus.PUBLISHED
@@ -129,7 +142,7 @@ class Collection(models.Model):
     title = models.CharField(max_length=200)
     author = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
-    cover_url = models.URLField(blank=True)
+    cover_url = models.URLField(max_length=500, blank=True)
     accent_color = models.CharField(max_length=9, null=True, blank=True)  # noqa: DJ001 — contract-nullable
     is_premium = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
