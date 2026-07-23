@@ -66,3 +66,23 @@ class InvalidAppKey(AppError):
     error_code = ErrorCode.INVALID_APP_KEY
     status_code = status.HTTP_401_UNAUTHORIZED
     default_detail = "Missing or invalid application key."
+
+
+class ValidationFailed(AppError):
+    """Malformed request (bad query/body). Also used for invalid/expired cursors so the
+    contract's 400 ``VALIDATION_ERROR`` is honored instead of DRF's default 404 for a bad
+    cursor (Constitution VI, spec FR-008)."""
+
+    error_code = ErrorCode.VALIDATION_ERROR
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Request could not be validated."
+
+
+class EntitlementRequired(AppError):
+    """Premium content requested without an active entitlement — gated at the download edge
+    (Constitution III). In BE-003 premium always returns this until IAP verification lands in
+    BE-005; the code is part of the frozen catalog (contract v0.3.2)."""
+
+    error_code = ErrorCode.ENTITLEMENT_REQUIRED
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    default_detail = "This wallpaper requires an active premium entitlement."

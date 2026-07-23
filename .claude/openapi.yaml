@@ -10,7 +10,7 @@ info:
     v0.3.1 (BE-002): thêm 2 error code nền tảng cho centralized exception handler —
     `SERVER_ERROR` (500) và `METHOD_NOT_ALLOWED` (405). ErrorResponse.code là chuỗi
     tự do nên schema không đổi; danh mục đầy đủ ở .claude/api-context.md.
-  version: "0.3.1"
+  version: "0.3.2"
 
 servers:
   - url: https://api.example.com/v1
@@ -65,6 +65,8 @@ components:
       description: >
         Danh sách slug tag, phân tách bằng dấu phẩy (vd "neon,night").
         Kết quả phải khớp TẤT CẢ tag được liệt kê (AND, không phải OR).
+        Slug reserved "all" (tag ảo "Tất cả") bị BỎ QUA — coi như không ràng buộc tag;
+        vd "all" → toàn bộ, "all,neon" → chỉ lọc "neon".
     OrientationParam:
       name: orientation
       in: query
@@ -84,9 +86,12 @@ components:
 
     Tag:
       type: object
+      description: >
+        Tag curated. Ngoại lệ: phần tử ảo "Tất cả" (id=0, slug="all") do API sinh, đứng đầu
+        mảng /tags, KHÔNG lưu trong DB — client dùng làm chip mặc định "lấy toàn bộ".
       properties:
-        id: { type: integer }
-        slug: { type: string, example: "neon" }
+        id: { type: integer, description: '0 = tag ảo "All" (reserved); tag thật ≥ 1' }
+        slug: { type: string, example: "neon", description: '"all" là slug reserved cho tag ảo' }
         name: { type: string, example: "Neon" }
         wallpaper_count: { type: integer }
 
@@ -323,14 +328,21 @@ paths:
     get:
       tags: [Public]
       summary: Danh sách tag curated (không phân trang — dùng cho filter chips + admin chọn)
+      description: >
+        Trả toàn bộ tag curated. Phần tử ĐẦU TIÊN luôn là tag ảo "Tất cả"
+        (id=0, slug="all", wallpaper_count = tổng wallpaper published) do API sinh — không lưu DB.
+        Client render nó làm chip mặc định; chọn nó = gọi GET /wallpapers không truyền `tags`.
       responses:
         '200':
-          description: OK
+          description: OK — phần tử [0] là tag ảo "All", theo sau là tag curated thật.
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Tag' }
+              example:
+                - { id: 0, slug: "all", name: "Tất cả", wallpaper_count: 128 }
+                - { id: 12, slug: "neon", name: "Neon", wallpaper_count: 87 }
 
   /collections:
     get:

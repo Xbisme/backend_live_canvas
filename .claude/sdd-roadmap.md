@@ -4,7 +4,7 @@
 >
 > **Vai trò file này**: pure planning cho track backend. Trạng thái hiện tại → [`project-context.md`](project-context.md). Ship history → [`changelog.md`](changelog.md).
 >
-> Last updated: 2026-07-23 (Chưa có spec nào merge · contract v0.3.0 — thêm resource Collection · thêm BE-001 Project Bootstrap 2-flavor, renumber BE cũ +1)
+> Last updated: 2026-07-23 (BE-001 + BE-002 đã merge vào `main` · contract v0.3.2 — thêm thẻ ảo "All" ở `GET /tags` · đang plan BE-003 Core Content API)
 > Full requirements: `docs/PRD.md`
 >
 > **Quy ước flavor**: Toàn repo **chỉ có đúng 2 flavor**: `dev` và `prod` (production). KHÔNG có `staging` hay bất kỳ flavor nào khác. Mọi settings/env/CI/deploy đều bám theo đúng 2 flavor này.
@@ -70,7 +70,7 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### Spec #000: API Contract Freeze
 
-- **Status**: 🟡 In progress (v0.3.0 — thêm resource `Collection`, chờ xác nhận cuối)
+- **Status**: 🟡 In progress (v0.3.1 — thêm error code `SERVER_ERROR`, `METHOD_NOT_ALLOWED` cho centralized handler; chờ xác nhận cuối)
 - **Không tạo branch riêng** — review trực tiếp `contracts/openapi.yaml` + `.claude/api-context.md`, phối hợp với repo `livecanvas-mobile`.
 - **Thứ tự bắt buộc**: `docs/screen-inventory.md` (màn hình cần gì) → mới tới contract. Không sửa contract trực tiếp mà không cập nhật screen-inventory trước.
 - **Checklist**: xem bản đầy đủ trong `api-context.md` §Quy ước chung; xác nhận error code catalog đã cover hết case; xác nhận entitlement luôn quyết ở `download-url` (kể cả bộ sưu tập premium — "Tải tất cả" chỉ lặp gọi download-url); xác nhận cursor pagination đã áp dụng đúng cho mọi list endpoint lớn; xác nhận tag + collection là curated (không free-form); xác nhận `GET /collections` không phân trang còn `GET /collections/{id}` nhúng items đúng thứ tự.
@@ -78,7 +78,7 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-001: Project Bootstrap & 2-Flavor Setup
 
-- **Status**: ⬜ Not started
+- **Status**: ✅ Merged (PR #1) — Django project + constitution + 2-flavor `dev`/`prod`, requirements, CI skeleton
 - **Branch**: `BE-001-project-bootstrap`
 - **Depends on**: — (không phụ thuộc contract; có thể chạy song song / trước #000)
 - **Mục tiêu**: Tạo khung project Django chạy được với **đúng 2 flavor `dev` + `prod`**, chốt constitution — CHƯA có model/endpoint nghiệp vụ nào.
@@ -95,14 +95,15 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-002: Backend Foundation
 
-- **Status**: ⬜ Not started
+- **Status**: ✅ Merged (PR #2) — DRF, app skeleton, X-App-Key gate, error envelope, storage config
 - **Branch**: `BE-002-backend-foundation`
 - **Depends on**: BE-001 (+ #000 gần chốt)
-- **Scope**: DRF skeleton + app `apps/wallpapers`, `apps/uploads`, `apps/iap` (rỗng, chưa model nghiệp vụ); wiring PostgreSQL vào 2 flavor; S3 (`django-storages`) + CDN config theo flavor; middleware xác thực `X-App-Key` cho tầng public/IAP; base cho error-code catalog (exception handler → format `{ "error": { "code", "message" } }`).
+- **Scope**: DRF skeleton + app `apps/wallpapers`, `apps/uploads`, `apps/iap` (rỗng, chưa model nghiệp vụ); wiring PostgreSQL vào 2 flavor; S3 (`django-storages`) + CDN config theo flavor; xác thực `X-App-Key` cho tầng public/IAP (`core.api.AppTierAPIView` + `core.authentication.AppKeyAuthentication`, opt-in per tier); base cho error-code catalog (`core.exception_handler.structured_exception_handler` + `core.errors` → format `{ "error": { "code", "message" } }`).
+- **Đã ship**: `core/` (api, authentication, errors, exception_handler, pagination, permissions, urls, views); apps mới có `apps.py` + `migrations/` (chưa có model).
 
 ### BE-003: Core Content API
 
-- **Status**: ⬜ Not started
+- **Status**: 🔵 Next up (chưa tạo branch/spec)
 - **Branch**: `BE-003-core-content-api`
 - **Depends on**: BE-002
 - **Scope**: Model `Category`/`Tag`/`Wallpaper`/`Collection` (many-to-many Wallpaper↔Tag; many-to-many **có thứ tự** Collection↔Wallpaper qua bảng nối `position`) đúng `openapi.yaml`; `GET /categories`, `GET /tags`, `GET /wallpapers` (cursor pagination), `GET /wallpapers/{id}` (populate `collections`), `POST /wallpapers/batch`; `GET /collections` (không phân trang), `GET /collections/{id}` (nhúng `items` đúng thứ tự); `POST/GET/DELETE /admin/tags` (curated tag management); seed script Pixabay/Pexels/Mixkit (lưu `source_url`, `license_type`); `download-url` trả mock/`501` tạm — hoàn thiện thật ở BE-004.

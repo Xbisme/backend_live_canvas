@@ -1,0 +1,112 @@
+{
+  "categories": [
+    { "slug": "urban", "name": "Đô thị", "icon_url": "https://cdn.example.com/icons/urban.png" },
+    { "slug": "nature", "name": "Thiên nhiên", "icon_url": "https://cdn.example.com/icons/nature.png" },
+    { "slug": "abstract", "name": "Trừu tượng", "icon_url": "https://cdn.example.com/icons/abstract.png" }
+  ],
+  "tags": [
+    { "slug": "neon", "name": "Neon" },
+    { "slug": "city", "name": "Thành phố" },
+    { "slug": "calm", "name": "Yên bình" },
+    { "slug": "loop", "name": "Loop" }
+  ],
+  "wallpapers": [
+    {
+      "key": "neon-city-loop",
+      "title": "Neon City Loop",
+      "category": "urban",
+      "tags": ["neon", "city", "loop"],
+      "orientation": "portrait",
+      "is_premium": true,
+      "thumbnail_url": "https://cdn.example.com/thumbs/neon-city-loop.jpg",
+      "preview_video_url": "https://cdn.example.com/preview/neon-city-loop.mp4",
+      "resolution": "1080x1920",
+      "duration_seconds": 8.0,
+      "file_size_bytes": 5242880,
+      "source_url": "https://pixabay.com/videos/neon-city-loop/",
+      "license_type": "Pixabay License"
+    },
+    {
+      "key": "shibuya-2099",
+      "title": "Shibuya 2099",
+      "category": "urban",
+      "tags": ["neon", "city"],
+      "orientation": "portrait",
+      "is_premium": false,
+      "thumbnail_url": "https://cdn.example.com/thumbs/shibuya-2099.jpg",
+      "preview_video_url": "https://cdn.example.com/preview/shibuya-2099.mp4",
+      "resolution": "1080x1920",
+      "duration_seconds": 10.0,
+      "file_size_bytes": 6291456,
+      "source_url": "https://pexels.com/video/shibuya-2099/",
+      "license_type": "Pexels License"
+    },
+    {
+      "key": "calm-forest",
+      "title": "Calm Forest",
+      "category": "nature",
+      "tags": ["calm", "loop"],
+      "orientation": "landscape",
+      "is_premium": false,
+      "thumbnail_url": "https://cdn.example.com/thumbs/calm-forest.jpg",
+      "preview_video_url": "https://cdn.example.com/preview/calm-forest.mp4",
+      "resolution": "1920x1080",
+      "duration_seconds": 12.0,
+      "file_size_bytes": 7340032,
+      "source_url": "https://mixkit.co/free-stock-video/calm-forest/",
+      "license_type": "Mixkit License"
+    },
+    {
+      "key": "aurora-drift",
+      "title": "Aurora Drift",
+      "category": "nature",
+      "tags": ["calm"],
+      "orientation": "portrait",
+      "is_premium": true,
+      "thumbnail_url": "https://cdn.example.com/thumbs/aurora-drift.jpg",
+      "preview_video_url": "https://cdn.example.com/preview/aurora-drift.mp4",
+      "resolution": "1080x1920",
+      "duration_seconds": 15.0,
+      "file_size_bytes": 8388608,
+      "source_url": "https://pixabay.com/videos/aurora-drift/",
+      "license_type": "Pixabay License"
+    },
+    {
+      "key": "liquid-gradient",
+      "title": "Liquid Gradient",
+      "category": "abstract",
+      "tags": ["loop"],
+      "orientation": "square",
+      "is_premium": false,
+      "thumbnail_url": "https://cdn.example.com/thumbs/liquid-gradient.jpg",
+      "preview_video_url": "https://cdn.example.com/preview/liquid-gradient.mp4",
+      "resolution": "1080x1080",
+      "duration_seconds": 6.0,
+      "file_size_bytes": 3145728,
+      "source_url": "https://pixabay.com/videos/liquid-gradient/",
+      "license_type": "Pixabay License"
+    }
+  ],
+  "collections": [
+    {
+      "slug": "neon-nights",
+      "title": "Neon về đêm",
+      "author": "tokyo",
+      "description": "Những hình nền lấy cảm hứng từ thành phố không bao giờ ngủ.",
+      "cover_url": "https://cdn.example.com/collections/neon-nights.jpg",
+      "accent_color": "#FF6F9C",
+      "is_premium": false,
+      "items": ["shibuya-2099", "neon-city-loop"]
+    },
+    {
+      "slug": "quiet-moments",
+      "title": "Khoảnh khắc tĩnh lặng",
+      "author": "aurora",
+      "description": "Bộ sưu tập nhẹ nhàng cho màn hình chờ.",
+      "cover_url": "https://cdn.example.com/collections/quiet-moments.jpg",
+      "accent_color": "#7CB8FF",
+      "is_premium": true,
+      "items": ["calm-forest", "aurora-drift", "liquid-gradient"]
+    }
+  ]
+}

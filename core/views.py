@@ -6,14 +6,10 @@ specs/BE-001-project-bootstrap/contracts/health-endpoints.md.
 """
 
 from django.db import connection
-from django.http import Http404
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-from core.api import AppTierAPIView
 
 
 class LivenessView(APIView):
@@ -46,40 +42,3 @@ class ReadinessView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return Response({"status": "ready"}, status=status.HTTP_200_OK)
-
-
-# ---------------------------------------------------------------------------
-# Temporary foundation probes (BE-002 validation only — NOT part of the product
-# contract). These exercise the app-tier X-App-Key gate and the structured error
-# envelope end-to-end before any business endpoint exists; remove in BE-003 once real
-# app-tier endpoints are available. See specs/BE-002-backend-foundation/research.md R6.
-# ---------------------------------------------------------------------------
-
-
-class AppTierProbeView(AppTierAPIView):
-    """Succeeds (200) only when a valid ``X-App-Key`` is presented — US1 probe."""
-
-    def get(self, request: Request) -> Response:
-        return Response({"ok": True}, status=status.HTTP_200_OK)
-
-
-class ProbeValidationView(AppTierAPIView):
-    """Raises a DRF ``ValidationError`` → 400 ``VALIDATION_ERROR`` — US2 probe."""
-
-    def get(self, request: Request) -> Response:
-        raise ValidationError("Invalid probe input.")
-
-
-class ProbeNotFoundView(AppTierAPIView):
-    """Raises ``Http404`` → 404 ``NOT_FOUND`` (routes through the DRF handler in every
-    flavor, unlike an unmatched URL) — US2 probe."""
-
-    def get(self, request: Request) -> Response:
-        raise Http404("Probe resource does not exist.")
-
-
-class ProbeBoomView(AppTierAPIView):
-    """Raises an unhandled exception → 500 ``SERVER_ERROR``, no traceback — US2 probe."""
-
-    def get(self, request: Request) -> Response:
-        raise RuntimeError("Intentional probe failure — should never leak to the client.")

@@ -4,7 +4,9 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (`livecanvas-backend`, `livecanvas-mobile`). Khi API đổi, sửa cả `openapi.yaml` lẫn `api-context.md` ở repo đang implement, rồi copy nguyên văn sang repo còn lại (xem "Contract Sync" trong `dev-workflow.md`).
 >
-> Last updated: 2026-07-23 · Contract version: **`v0.3.1`**
+> Last updated: 2026-07-23 · Contract version: **`v0.3.2`**
+>
+> **Đổi so với v0.3.1**: `GET /tags` giờ chèn **tag ảo "Tất cả"** (`{ id: 0, slug: "all", name: "Tất cả", wallpaper_count: <tổng published> }`) ở đầu mảng — do API sinh, KHÔNG lưu DB, làm chip mặc định "lấy toàn bộ". Slug `all` là **reserved**: `GET /wallpapers?tags=` bỏ qua slug `all` (không ràng buộc tag). Không thêm endpoint/error code nào; không đổi schema Wallpaper.
 >
 > **Đổi so với v0.3.0**: thêm 2 error code nền tảng `SERVER_ERROR` (500, lỗi máy chủ không lường trước — không lộ chi tiết nội bộ) và `METHOD_NOT_ALLOWED` (405) cho centralized exception handler (BE-002). Không đổi endpoint/schema nào khác.
 >
@@ -83,7 +85,15 @@ Format chung:
 
 ### `GET /tags`
 - Header: `X-App-Key`
-- **200**: `[{ "id": 12, "slug": "neon", "name": "Neon", "wallpaper_count": 87 }]`
+- Danh sách tag curated (không phân trang). Phần tử **đầu tiên luôn là tag ảo "Tất cả"** (`id: 0`, `slug: "all"`) do API sinh — không lưu DB, `wallpaper_count` = tổng wallpaper published. Client render làm chip mặc định; chọn "All" = gọi `GET /wallpapers` **không** truyền `tags`.
+- **200**:
+```json
+[
+  { "id": 0, "slug": "all", "name": "Tất cả", "wallpaper_count": 128 },
+  { "id": 12, "slug": "neon", "name": "Neon", "wallpaper_count": 87 }
+]
+```
+- **Reserved**: slug `all` không được dùng cho tag thật (admin/seed cấm tạo); trong filter `?tags=` slug `all` bị bỏ qua (coi như không ràng buộc).
 - **401**: `INVALID_APP_KEY`
 
 ### `GET /collections`
@@ -125,7 +135,7 @@ Format chung:
 
 ### `GET /wallpapers`
 - Header: `X-App-Key`
-- Query: `cursor` (string, optional), `limit` (int, default 20, max 100), `category` (slug), `tags` (slug, phân tách phẩy — **AND**, phải khớp hết), `orientation`, `search`, `is_premium`
+- Query: `cursor` (string, optional), `limit` (int, default 20, max 100), `category` (slug), `tags` (slug, phân tách phẩy — **AND**, phải khớp hết; slug reserved `all` bị bỏ qua → không truyền `tags` hoặc `tags=all` đều trả toàn bộ, sắp xếp mới→cũ), `orientation`, `search`, `is_premium`
 - **200**:
 ```json
 {
