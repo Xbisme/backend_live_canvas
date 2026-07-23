@@ -50,9 +50,12 @@ class Command(BaseCommand):
 
         wallpapers = {}
         for row in data.get("wallpapers", []):
+            # Natural key = source_url: unique per upstream clip, stable across re-crawls
+            # (titles are derived from page slugs and may collide).
             obj, _ = Wallpaper.objects.update_or_create(
-                title=row["title"],
+                source_url=row["source_url"],
                 defaults={
+                    "title": row["title"],
                     "category": categories[row["category"]],
                     "orientation": row["orientation"],
                     "is_premium": row.get("is_premium", False),
@@ -61,7 +64,6 @@ class Command(BaseCommand):
                     "resolution": row.get("resolution"),
                     "duration_seconds": row.get("duration_seconds"),
                     "file_size_bytes": row.get("file_size_bytes"),
-                    "source_url": row["source_url"],
                     "license_type": row["license_type"],
                 },
             )
