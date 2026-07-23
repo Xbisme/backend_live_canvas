@@ -6,7 +6,11 @@ info:
     admin upload, admin tag/collection management, IAP verify-receipt tự viết).
     Được suy ra từ docs/screen-inventory.md — mọi thay đổi màn hình phải
     cập nhật file đó trước.
-  version: "0.3.0"
+
+    v0.3.1 (BE-002): thêm 2 error code nền tảng cho centralized exception handler —
+    `SERVER_ERROR` (500) và `METHOD_NOT_ALLOWED` (405). ErrorResponse.code là chuỗi
+    tự do nên schema không đổi; danh mục đầy đủ ở .claude/api-context.md.
+  version: "0.3.1"
 
 servers:
   - url: https://api.example.com/v1
@@ -192,7 +196,7 @@ components:
         error:
           type: object
           properties:
-            code: { type: string, example: "ENTITLEMENT_REQUIRED" }
+            code: { type: string, example: "ENTITLEMENT_REQUIRED" }  # full catalog in .claude/api-context.md (incl. SERVER_ERROR, METHOD_NOT_ALLOWED)
             message: { type: string }
 
     VerifyReceiptRequest:

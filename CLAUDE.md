@@ -15,7 +15,9 @@ system** — premium entitlement is resolved per store `transaction_id`.
 1. **Two-tier auth isolation.** `X-App-Key` authenticates the *app* (public + IAP endpoints);
    `Authorization: Bearer <jwt>` authenticates an *admin* (`/admin/*` custom API). Never mix
    the two tiers on one endpoint or let one fall back to the other. Webhooks are authenticated
-   only by verifying their signature. (Not yet implemented — arrives in BE-002/BE-003.)
+   only by verifying their signature. (App-tier `X-App-Key` auth landed in BE-002 via
+   `core.api.AppTierAPIView` + `core.authentication.AppKeyAuthentication`, opt-in per tier —
+   never a global default; admin Bearer JWT arrives in BE-004. Webhooks: BE-005.)
    - Django's built-in admin (`/admin/`) is a **separate internal-staff** tool (session auth).
      It is distinct from both API tiers and from the account-less handling of app end-users.
 
@@ -26,7 +28,8 @@ system** — premium entitlement is resolved per store `transaction_id`.
 3. **Structured errors & the error-code catalog.** Every error response is
    `{ "error": { "code": "<CODE>", "message": "..." } }` with `code` from the catalog in
    `.claude/api-context.md`. Produce errors via the centralized DRF exception handler — never
-   ad-hoc error bodies, never raw exceptions/tracebacks to clients. (Handler lands in BE-002.)
+   ad-hoc error bodies, never raw exceptions/tracebacks to clients. (Handler landed in BE-002:
+   `core.exception_handler.structured_exception_handler` + catalog in `core.errors`.)
 
 4. **Two-flavor discipline.** Exactly two settings flavors exist: `dev` and `prod`
    (`config/settings/{base,dev,prod}.py`). **Never** add a `staging.py` or any third flavor.

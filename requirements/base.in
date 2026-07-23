@@ -9,3 +9,4 @@ django-environ==0.14.0
 gunicorn==26.0.0
 whitenoise==6.12.0
 python-json-logger==4.1.0
+django-storages[s3]==1.14.6   # S3-compatible storage (config only in BE-002); pulls boto3 (locked in .txt)

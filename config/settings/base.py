@@ -51,7 +51,25 @@ INSTALLED_APPS = [
     "rest_framework",
     # Local
     "core",
+    "apps.wallpapers",
+    "apps.uploads",
+    "apps.iap",
 ]
+
+# ---------------------------------------------------------------------------
+# Django REST Framework (Constitution IV, VI)
+# ---------------------------------------------------------------------------
+# App-tier auth is OPT-IN PER TIER via core.api.AppTierAPIView — NEVER a global
+# default — so the admin tier (BE-004) stays strictly isolated (Constitution II).
+# The pagination default (cursor envelope) is wired once list endpoints exist; the
+# class is added to this block in BE-002 US3.
+REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "core.exception_handler.structured_exception_handler",
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.EnvelopeCursorPagination",
+    "PAGE_SIZE": 20,
+}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -114,6 +132,21 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ---------------------------------------------------------------------------
+# Object storage & CDN (BE-002 — configuration only; no upload logic until BE-004)
+# ---------------------------------------------------------------------------
+# S3-compatible object storage via django-storages. Provider-agnostic: AWS S3 /
+# Cloudflare R2 / DO Spaces differ only by endpoint/region. base declares the env
+# catalog with declared-not-required defaults; the STORAGES backend is chosen per
+# flavor (dev → local FileSystemStorage fallback; prod → S3Storage, fail-fast).
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="")
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="")
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
+# Public base URL a CDN serves objects from (used by later specs to build media URLs).
+CDN_BASE_URL = env("CDN_BASE_URL", default="")
 
 # ---------------------------------------------------------------------------
 # Logging level (flavors override handlers/formatters)

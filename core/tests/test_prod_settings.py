@@ -19,6 +19,12 @@ _VALID_ENV = {
     "SECRET_KEY": "x" * 64,
     "DATABASE_URL": "postgres://u:p@localhost:5432/livecanvas",
     "ALLOWED_HOSTS": "api.example.com",
+    # Required in prod as of BE-002 (app-tier key + storage/CDN fail-fast).
+    "X_APP_KEY": "prod-app-key",
+    "AWS_STORAGE_BUCKET_NAME": "livecanvas-media",
+    "AWS_ACCESS_KEY_ID": "AKIA_TEST",
+    "AWS_SECRET_ACCESS_KEY": "secret-test",
+    "CDN_BASE_URL": "https://cdn.example.com",
 }
 
 # Dump the security-relevant settings as JSON so the parent can assert on them.
