@@ -5,7 +5,14 @@ and a local docker-compose Postgres default. NOT reachable in production.
 """
 
 from config.settings.base import *  # noqa: F401,F403
-from config.settings.base import DJANGO_LOG_LEVEL, env
+from config.settings.base import (
+    AWS_S3_ENDPOINT_URL,
+    AWS_STORAGE_BUCKET_NAME,
+    BASE_DIR,
+    CDN_BASE_URL,
+    DJANGO_LOG_LEVEL,
+    env,
+)
 
 DEBUG = True
 
@@ -20,6 +27,27 @@ DATABASES = {
         default="postgres://livecanvas:livecanvas@localhost:5432/livecanvas",
     ),
 }
+
+# ---------------------------------------------------------------------------
+# Object storage — local fallback by default; optional MinIO/S3 when configured.
+# ---------------------------------------------------------------------------
+# Boots with no external credentials (spec FR-010): store to the local filesystem
+# unless BOTH an S3 endpoint and a bucket are provided (e.g. a local MinIO).
+if AWS_S3_ENDPOINT_URL and AWS_STORAGE_BUCKET_NAME:
+    STORAGES = {
+        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+else:
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+# Fall back to the local media URL when no CDN is configured (dev ergonomics).
+CDN_BASE_URL = CDN_BASE_URL or MEDIA_URL
 
 # Verbose human-readable console logging.
 LOGGING = {

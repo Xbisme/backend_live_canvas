@@ -9,9 +9,27 @@ operational and intentionally not part of that contract.
 """
 
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import include, path
+
+from core.errors import ErrorCode
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("core.urls")),
 ]
+
+
+def _envelope(code: str, message: str, status: int) -> JsonResponse:
+    return JsonResponse({"error": {"code": code, "message": message}}, status=status)
+
+
+def handler404(request, exception):  # noqa: ARG001 — Django handler signature
+    """Envelope for unmatched URLs (used when DEBUG=False). API 404s raised inside a
+    DRF view are handled by core.exception_handler in every flavor."""
+    return _envelope(ErrorCode.NOT_FOUND, "Resource not found.", 404)
+
+
+def handler500(request):  # noqa: ARG001 — Django handler signature
+    """Envelope for non-DRF server errors (used when DEBUG=False)."""
+    return _envelope(ErrorCode.SERVER_ERROR, "An unexpected error occurred.", 500)

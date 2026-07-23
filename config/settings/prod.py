@@ -18,6 +18,14 @@ DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
 
+# App-tier key MUST be configured in prod — fail-closed, never a silent open door
+# (spec FR-021). Read with no default so a missing/empty value fails fast at startup.
+X_APP_KEY = env("X_APP_KEY")
+if not X_APP_KEY:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured("X_APP_KEY must be set (non-empty) in the prod flavor.")
+
 # ---------------------------------------------------------------------------
 # Security hardening
 # ---------------------------------------------------------------------------
@@ -41,9 +49,19 @@ MIDDLEWARE = [
     *MIDDLEWARE[1:],
 ]
 
+# ---------------------------------------------------------------------------
+# Object storage & CDN — real S3-compatible backend; required config fails fast.
+# ---------------------------------------------------------------------------
+# Read the required storage/CDN values with NO default (spec FR-011). Provider-agnostic:
+# region/endpoint are optional (AWS uses region; R2/Spaces use an endpoint).
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
+CDN_BASE_URL = env("CDN_BASE_URL")
+
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "storages.backends.s3.S3Storage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
