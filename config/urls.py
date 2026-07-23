@@ -16,6 +16,9 @@ from core.errors import ErrorCode
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Product API (contract v0.3.2) — public content endpoints.
+    path("", include("apps.wallpapers.urls")),
+    # Operational health endpoints (not part of the product contract).
     path("", include("core.urls")),
 ]
 

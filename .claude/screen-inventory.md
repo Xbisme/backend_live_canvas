@@ -4,7 +4,7 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (đồng bộ tay giống `api-context.md`).
 >
-> Last updated: 2026-07-23 · Contract version tương ứng: `v0.3.0`
+> Last updated: 2026-07-23 · Contract version tương ứng: `v0.3.2`
 
 ---
 
@@ -15,7 +15,7 @@
 | 1 | **Browse** (trang chủ, grid theo category) | Thumbnail, title, category, tags, is_premium, orientation — cuộn vô hạn | Scroll load thêm (cursor), tap → Detail, đổi category | `GET /wallpapers` |
 | 2 | **Category Detail** (list theo 1 category) | Giống Browse, filter cố định 1 category | Scroll load thêm, filter phụ orientation/tag | `GET /wallpapers?category=...` |
 | 3 | **Search** | Giống Browse, filter theo từ khóa + tag chọn thêm | Scroll load thêm, chọn tag gợi ý | `GET /wallpapers?search=...&tags=...`, `GET /tags` |
-| 4 | **Tag Filter Chips** (dùng ở Browse/Search) | Danh sách tag có sẵn (curated) | Chọn/bỏ chọn tag | `GET /tags` |
+| 4 | **Tag Filter Chips** (dùng ở Browse/Search) | Danh sách tag có sẵn (curated), **có chip "All" (Tất cả) đứng đầu, chọn mặc định** | Chọn "All" = bỏ mọi filter tag (lấy toàn bộ, mới→cũ); chọn/bỏ chọn tag khác | `GET /tags` |
 | 5 | **Collections** (tab "Bộ sưu tập", list cover card) | Mỗi collection: cover_url, title, author, wallpaper_count, is_premium — danh sách nhỏ curated | Tap → Collection Detail | `GET /collections` |
 | 6 | **Collection Detail** (1 bộ sưu tập curated) | Meta collection (cover_url, accent_color, title, author, description, is_premium, wallpaper_count) + **danh sách wallpaper thuộc bộ** (đúng thứ tự curate) | Tap wallpaper → Detail, Favorite toggle, "Tải tất cả", "Mở khoá bộ sưu tập" nếu premium & chưa mua | `GET /collections/{id}` |
 | 7 | **Wallpaper Detail** | Full info + preview_video_url, license info, danh sách tag đầy đủ, **(các) bộ sưu tập chứa wallpaper này** (để nhảy tới Collection Detail) | Play preview, Favorite toggle, Tải/Set (trigger download-url), Mua nếu premium, tap "Từ bộ sưu tập ·…" → Collection Detail | `GET /wallpapers/{id}`, `GET /wallpapers/{id}/download-url` |
@@ -31,6 +31,7 @@
 - **Pagination**: cursor-based (keyset) cho mọi endpoint list wallpaper — không dùng `page`/`page_size` kiểu offset. Lý do: tránh lệch trang khi admin thêm/xóa liên tục, và ổn định hơn cho UI cuộn vô hạn.
 - **Favorites**: không cache toàn bộ data lúc favorite — chỉ lưu local mảng ID, mỗi lần mở màn Favorites gọi `POST /wallpapers/batch` để lấy data mới nhất (tránh hiển thị data cũ nếu wallpaper đã bị admin sửa/xóa).
 - **Tag**: curated — admin chỉ chọn từ tag có sẵn khi upload, tạo tag mới phải qua màn hình quản lý tag riêng (#12). Giúp tránh tag rác, search/filter chính xác theo `tag_id` thay vì so khớp chuỗi.
+  - **Chip "All" (Tất cả)**: là **tag ảo do API sinh**, KHÔNG lưu trong DB và KHÔNG gắn vào từng wallpaper. `GET /tags` chèn phần tử `{ id: 0, slug: "all", name: "Tất cả", wallpaper_count: <tổng wallpaper published> }` ở **đầu** mảng để client render chip mặc định. Chọn "All" = gọi `GET /wallpapers` **không** truyền `tags` (đã sẵn trả toàn bộ, sắp xếp mới→cũ). Slug `all` là **reserved**: `GET /wallpapers?tags=` bỏ qua slug `all` (coi như không ràng buộc tag) và admin/seed KHÔNG được tạo tag thật slug `all`. Lý do làm tag ảo thay vì tag DB: tránh phải gắn tag vào mọi wallpaper, tránh lệch `wallpaper_count`, giữ curated integrity.
 - **Collection (Bộ sưu tập)**: curated bởi admin, giống Category/Tag nhưng là **tập hợp wallpaper có thứ tự** kèm cover/author/description riêng.
   - Quan hệ **many-to-many có thứ tự** giữa `Collection` ↔ `Wallpaper` (1 wallpaper có thể nằm trong nhiều bộ; thứ tự trong bộ do admin quyết).
   - `GET /collections` **KHÔNG phân trang** (curated, số lượng nhỏ như categories/tags) — chỉ trả meta + `wallpaper_count`, không nhúng items.

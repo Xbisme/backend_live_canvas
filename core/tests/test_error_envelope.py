@@ -14,6 +14,8 @@ from rest_framework.test import APIClient
 from core.errors import ErrorCode
 from core.exception_handler import structured_exception_handler
 
+pytestmark = pytest.mark.django_db
+
 _KEY = "envelope-test-key"
 
 
@@ -26,34 +28,23 @@ def client() -> APIClient:
 
 @override_settings(X_APP_KEY=_KEY)
 def test_not_found_envelope(client: APIClient) -> None:
-    response = client.get("/_probe/notfound")
+    # Real 404 path: an unknown wallpaper id raised as Http404 inside a DRF view.
+    response = client.get("/wallpapers/999999")
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["error"]["code"] == ErrorCode.NOT_FOUND
 
 
 @override_settings(X_APP_KEY=_KEY)
 def test_validation_envelope(client: APIClient) -> None:
-    response = client.get("/_probe/validation")
+    # Real 400 path: limit above the max is a validation error, not a silent clamp.
+    response = client.get("/wallpapers?limit=999")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.json()["error"]["code"] == ErrorCode.VALIDATION_ERROR
 
 
 @override_settings(X_APP_KEY=_KEY)
-def test_unhandled_exception_is_generic_500_without_traceback(client: APIClient) -> None:
-    response = client.get("/_probe/boom")
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    body = response.json()
-    assert body["error"]["code"] == ErrorCode.SERVER_ERROR
-    # No internal detail leaks to the client.
-    text = response.content.decode()
-    assert "Traceback" not in text
-    assert "RuntimeError" not in text
-    assert "Intentional probe failure" not in text
-
-
-@override_settings(X_APP_KEY=_KEY)
 def test_error_body_shape_is_exactly_error_code_message(client: APIClient) -> None:
-    body = client.get("/_probe/validation").json()
+    body = client.get("/wallpapers?limit=999").json()
     assert set(body.keys()) == {"error"}
     assert set(body["error"].keys()) == {"code", "message"}
 

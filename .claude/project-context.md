@@ -3,14 +3,14 @@
 > Repo: `livecanvas-backend` (Django + DRF)
 > Repo liên quan: `livecanvas-mobile` (Flutter, độc lập hoàn toàn — đồng bộ qua `contracts/openapi.yaml` + `.claude/api-context.md`, copy tay giữa 2 repo)
 >
-> Last updated: 2026-07-23 (Repo khởi tạo — chưa có spec nào triển khai · contract v0.3.0)
+> Last updated: 2026-07-23 (BE-001 + BE-002 đã merge · contract v0.3.2 — thẻ ảo "All" ở /tags · đang plan BE-003 Core Content API)
 > **Mục đích**: Snapshot tối thiểu để bắt đầu 1 session làm việc trên repo backend.
 >
 > **Đọc file nào khi nào**:
 > - Bắt đầu session mới → file này + `docs/PRD.md` + `CLAUDE.md` (khi có).
 > - Chuẩn bị họp spec mới → file này + [`sdd-roadmap.md`](sdd-roadmap.md).
 > - **Trước khi đổi/thêm bất kỳ API nào** → [`../docs/screen-inventory.md`](../docs/screen-inventory.md) TRƯỚC TIÊN (màn hình cần gì quyết định API, không phải ngược lại), rồi mới tới `api-context.md`.
-> - Cần biết chi tiết từng endpoint (header/body/response) → [`api-context.md`](api-context.md) + [`../contracts/openapi.yaml`](../contracts/openapi.yaml) — **contract version hiện tại: `v0.3.0`**.
+> - Cần biết chi tiết từng endpoint (header/body/response) → [`api-context.md`](api-context.md) + [`openapi.yaml`](openapi.yaml) — **contract version hiện tại: `v0.3.2`**.
 > - Cần hiểu vì sao spec X ra đời → [`decisions/`](decisions/).
 > - Cần biết spec nào ship khi nào → [`changelog.md`](changelog.md).
 
@@ -24,11 +24,13 @@
 
 ## Current Focus
 
-- **Trạng thái**: Repo mới khởi tạo, chưa merge spec nào.
+- **Trạng thái**: BE-001 (bootstrap 2-flavor + constitution) và BE-002 (foundation: DRF, app skeleton, X-App-Key gate, error envelope, storage config) đã merge vào `main`.
 - **Đã có sẵn**:
   - `docs/screen-inventory.md` — danh sách màn hình + data cần, làm nền cho contract (đã review, 1 giả định còn treo: Onboarding không cần data riêng).
-  - `contracts/openapi.yaml` v0.3.0 + `.claude/api-context.md` v0.3.0 — cursor-based pagination, resource `Tag` curated, `POST /wallpapers/batch` cho Favorites, resource `Collection` curated (bộ sưu tập có thứ tự) + `GET /collections`, `GET /collections/{id}`, admin `/admin/collections`.
-- **Spec tiếp theo**: `BE-001-project-bootstrap` — tạo khung Django + chốt constitution, chạy được với **đúng 2 flavor `dev` + `prod`** (không staging). Có thể làm song song với việc freeze contract #000 (không phụ thuộc contract). Foundation (apps/DB/S3/X-App-Key) chuyển xuống `BE-002`.
+  - `.claude/openapi.yaml` v0.3.2 + `.claude/api-context.md` v0.3.2 — cursor-based pagination, resource `Tag` curated (+ **thẻ ảo "All"** id=0/slug=all ở đầu `GET /tags`, reserved slug), `POST /wallpapers/batch` cho Favorites, resource `Collection` curated (bộ sưu tập có thứ tự) + `GET /collections`, `GET /collections/{id}`, admin `/admin/collections`; error code `SERVER_ERROR`, `METHOD_NOT_ALLOWED`.
+  - ⚠️ **Chưa sync sang `livecanvas-mobile`**: contract v0.3.2 (openapi.yaml + api-context.md + screen-inventory.md) cần copy nguyên văn sang repo mobile (Contract Sync).
+  - `core/` — api (`AppTierAPIView`), authentication (`AppKeyAuthentication`), errors (catalog), exception_handler, pagination (cursor envelope), permissions, urls, views. Apps `wallpapers|uploads|iap` mới có `apps.py` + `migrations/`, **chưa có model nghiệp vụ**.
+- **Spec tiếp theo**: `BE-003-core-content-api` — models `Category`/`Tag`/`Wallpaper`/`Collection` + public content API (list/detail/filter/search, cursor pagination), admin `/admin/tags`, seed script, `download-url` mock/`501` tạm. ⚠️ Điểm đồng bộ với repo mobile (MO-002).
 - **Quyết định kỹ thuật đã chốt** (ảnh hưởng schema DB):
   - Pagination: cursor-based (keyset), không dùng offset `page`/`page_size`.
   - Tag: curated — model `Tag` many-to-many với `Wallpaper`, admin chỉ chọn `tag_ids` có sẵn khi upload, tạo tag mới qua endpoint riêng `/admin/tags`.

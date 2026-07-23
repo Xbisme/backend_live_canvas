@@ -1,8 +1,9 @@
 """DRF + feature-app foundation tests (spec US3: FR-001..FR-005).
 
-Asserts the three feature apps are registered and model-less, the framework defaults
-(cursor pagination + structured exception handler) are wired globally, the pagination
-response builder emits the contract envelope, and no migrations are outstanding.
+Asserts the three feature apps are registered, the framework defaults (cursor pagination +
+structured exception handler) are wired globally, the pagination response builder emits the
+contract envelope, and no migrations are outstanding. ``wallpapers`` gained content models in
+BE-003; ``uploads``/``iap`` remain model-less until BE-004/BE-005.
 """
 
 from io import StringIO
@@ -16,13 +17,19 @@ from core.exception_handler import structured_exception_handler
 from core.pagination import EnvelopeCursorPagination
 
 _FEATURE_APPS = ["wallpapers", "uploads", "iap"]
+_STILL_MODEL_LESS = ["uploads", "iap"]  # wallpapers has models as of BE-003
 
 
-def test_feature_apps_registered_and_model_less() -> None:
+def test_feature_apps_registered() -> None:
     for label in _FEATURE_APPS:
         config = apps.get_app_config(label)
         assert config.name == f"apps.{label}"
-        assert list(config.get_models()) == [], f"apps.{label} must have no models in BE-002"
+
+
+def test_pending_domain_apps_still_model_less() -> None:
+    for label in _STILL_MODEL_LESS:
+        config = apps.get_app_config(label)
+        assert list(config.get_models()) == [], f"apps.{label} must have no models until its spec"
 
 
 def test_default_pagination_is_envelope_cursor() -> None:
