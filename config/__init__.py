@@ -1,6 +1,10 @@
 """LiveCanvas backend project package.
 
-The Celery app (config/celery.py) is a reserved placeholder for BE-004 and is
-intentionally NOT imported here yet — `celery` is not a dependency until then, and
-the web service runs without a broker.
+Importing the Celery app here makes ``@shared_task`` bind to it for both the web
+process and the worker (``celery -A config worker``) — standard Django+Celery wiring
+(BE-004).
 """
+
+from config.celery import app as celery_app
+
+__all__ = ["celery_app"]

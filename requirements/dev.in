@@ -1,5 +1,5 @@
 # Dev/test dependencies (dev flavor). Compile with:
-# uv pip compile requirements/dev.in -o requirements/dev.txt
+# uv pip compile requirements/dev.in -o requirements/dev.txt --universal --python-version 3.11
 -r base.in
 
 pytest==9.1.1

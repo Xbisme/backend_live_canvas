@@ -15,9 +15,12 @@ system** — premium entitlement is resolved per store `transaction_id`.
 1. **Two-tier auth isolation.** `X-App-Key` authenticates the *app* (public + IAP endpoints);
    `Authorization: Bearer <jwt>` authenticates an *admin* (`/admin/*` custom API). Never mix
    the two tiers on one endpoint or let one fall back to the other. Webhooks are authenticated
-   only by verifying their signature. (App-tier `X-App-Key` auth landed in BE-002 via
-   `core.api.AppTierAPIView` + `core.authentication.AppKeyAuthentication`, opt-in per tier —
-   never a global default; admin Bearer JWT arrives in BE-004. Webhooks: BE-005.)
+   only by verifying their signature. (App tier: `core.api.AppTierAPIView` +
+   `core.authentication.AppKeyAuthentication` since BE-002. Admin tier since BE-004:
+   `core.api.AdminTierAPIView` + `AdminJWTAuthentication` + `IsAdminStaff`; tokens issued by
+   `POST /admin/auth/login|refresh` (simplejwt, access 30' / refresh 7d rotate). Custom
+   `/admin/*` API routes MUST be mounted BEFORE the Django-admin catch-all in `config/urls.py`.
+   Webhooks: BE-005.)
    - Django's built-in admin (`/admin/`) is a **separate internal-staff** tool (session auth).
      It is distinct from both API tiers and from the account-less handling of app end-users.
 
@@ -51,16 +54,23 @@ system** — premium entitlement is resolved per store `transaction_id`.
 
 ```bash
 # Setup (dev)
+brew install ffmpeg libmagic       # system deps for the media pipeline (BE-004)
 uv venv && uv pip sync requirements/dev.txt
 cp .env.dev.example .env.dev
-docker compose up -d db
+docker compose up -d db redis minio   # minio-init auto-creates the 2 buckets
 python manage.py migrate
+python manage.py seed_content         # 397 wallpapers from the committed fixture
 
 # Create the initial internal-staff superuser for Django admin (FR-019)
 python manage.py createsuperuser
 
 # Run
 python manage.py runserver          # dev flavor (default)
+celery -A config worker -l info     # media pipeline worker (BE-004)
+
+# Content ops (BE-004)
+python manage.py backfill_media       # local dataset → storage + pipeline (idempotent)
+python manage.py purge_stale_uploads  # orphaned upload slots >24h (--delete to remove)
 
 # Prod flavor checks
 export DJANGO_SETTINGS_MODULE=config.settings.prod   # requires a valid .env.prod
@@ -75,8 +85,14 @@ python manage.py makemigrations --check --dry-run
 ## Layout
 
 - `config/` — project package (`settings/{base,dev,prod}`, `urls`, `wsgi`, `asgi`,
-  `celery` placeholder for BE-004)
-- `core/` — thin support app (operational health endpoints; no models)
+  `celery` — real Celery app since BE-004)
+- `core/` — thin support app, **no models**: health endpoints, both auth tiers
+  (`api`, `authentication`, `permissions`), admin login/refresh views, error catalog,
+  exception handler, pagination
+- `apps/wallpapers|uploads|iap|audit` — domain apps (uploads: storage 2 vùng +
+  pipeline + backfill; audit: append-only trail, write via `audit.services.record` only)
+- `data/crawl/` — committed crawl metadata (manifest + video index) →
+  `scripts/build_seed_fixture.py` regenerates the seed fixture on any machine
 - `requirements/` — `*.in` (authored) + `*.txt` (uv-compiled locks); both committed
 - `specs/` — speckit SDD output per `BE-NNN-*`
 - `.claude/` — planning docs (roadmap, contexts, api-context)

@@ -1,6 +1,6 @@
 # Base runtime dependencies (shared by all flavors).
 # Versions verified on PyPI 2026-07-23 (Constitution XI — Dependency Hygiene).
-# Compile with: uv pip compile requirements/base.in -o requirements/base.txt
+# Compile with: uv pip compile requirements/base.in -o requirements/base.txt --universal --python-version 3.11
 
 Django>=5.2,<5.3            # 5.2 LTS (supported through Apr 2028); latest patch 5.2.16
 djangorestframework==3.17.1
@@ -10,3 +10,8 @@ gunicorn==26.0.0
 whitenoise==6.12.0
 python-json-logger==4.1.0
 django-storages[s3]==1.14.6   # S3-compatible storage (config only in BE-002); pulls boto3 (locked in .txt)
+djangorestframework-simplejwt==5.5.1   # admin JWT tier (BE-004): access 30' / refresh 7d rotate + token_blacklist
+celery[redis]==5.6.3          # async media pipeline (BE-004); broker Redis.
+                              # redis client KHÔNG pin riêng: kombu 5.6 caps redis <6.5
+                              # (PyPI redis 8.x chưa được kombu hỗ trợ) — bản exact chốt ở .txt lock
+python-magic==0.4.27          # magic-byte MIME sniffing (needs system libmagic)

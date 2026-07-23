@@ -15,11 +15,15 @@ from django.urls import include, path
 from core.errors import ErrorCode
 
 urlpatterns = [
+    # Product API (contract v0.4.0). ORDER MATTERS: the custom /admin/* API routes must
+    # come BEFORE the Django-admin mount — django.contrib.admin ships a catch-all view
+    # under "admin/" that would otherwise swallow /admin/auth/*, /admin/wallpapers, …
+    path("", include("core.urls")),  # health + /admin/auth/*
+    path("", include("apps.wallpapers.urls")),  # public content endpoints
+    path("", include("apps.wallpapers.urls_admin")),  # /admin/wallpapers|tags|collections
+    path("", include("apps.uploads.urls")),  # /admin/uploads/presign
+    # Django's built-in admin (internal-staff tool, spec FR-019) — keep LAST.
     path("admin/", admin.site.urls),
-    # Product API (contract v0.3.2) — public content endpoints.
-    path("", include("apps.wallpapers.urls")),
-    # Operational health endpoints (not part of the product contract).
-    path("", include("core.urls")),
 ]
 
 

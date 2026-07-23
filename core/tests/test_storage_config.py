@@ -11,8 +11,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from django.core.files.storage import storages
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _PROD_ENV = {
@@ -25,6 +23,8 @@ _PROD_ENV = {
     "AWS_ACCESS_KEY_ID": "AKIA_TEST",
     "AWS_SECRET_ACCESS_KEY": "secret-test",
     "CDN_BASE_URL": "https://cdn.example.com",
+    "AWS_PUBLIC_BUCKET_NAME": "livecanvas-public",
+    "CELERY_BROKER_URL": "redis://localhost:6379/0",
 }
 
 _DUMP = (
@@ -50,8 +50,25 @@ def _run(script: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
 
 
 def test_dev_uses_local_fallback_without_credentials() -> None:
-    # FR-010: dev boots with no S3 creds → local filesystem storage.
-    assert type(storages["default"]).__name__ == "FileSystemStorage"
+    """FR-010: dev boots with no S3 creds → local filesystem storage.
+
+    Hermetic subprocess: real env vars override the developer's ``.env.dev`` (which,
+    as of BE-004, legitimately carries MinIO credentials), so the no-credentials
+    branch is exercised regardless of local machine state.
+    """
+    env = {
+        "DJANGO_SETTINGS_MODULE": "config.settings.dev",
+        "AWS_S3_ENDPOINT_URL": "",
+        "AWS_STORAGE_BUCKET_NAME": "",
+    }
+    script = (
+        "from django.conf import Settings;"
+        "s=Settings('config.settings.dev');"
+        "print(s.STORAGES['default']['BACKEND'])"
+    )
+    result = _run(script, env)
+    assert result.returncode == 0, result.stderr
+    assert "FileSystemStorage" in result.stdout
 
 
 def test_prod_resolves_s3_and_cdn() -> None:

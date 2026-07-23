@@ -4,7 +4,9 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (`livecanvas-backend`, `livecanvas-mobile`). Khi API đổi, sửa cả `openapi.yaml` lẫn `api-context.md` ở repo đang implement, rồi copy nguyên văn sang repo còn lại (xem "Contract Sync" trong `dev-workflow.md`).
 >
-> Last updated: 2026-07-23 · Contract version: **`v0.3.2`**
+> Last updated: 2026-07-23 · Contract version: **`v0.4.0`**
+>
+> **Đổi so với v0.3.2 (BE-004)**: thêm **admin auth surface** — `POST /admin/auth/login` (credential Django staff → JWT access 30 phút + refresh 7 ngày) và `POST /admin/auth/refresh` (rotate: trả cặp token MỚI, refresh cũ bị blacklist). `GET /wallpapers/{id}/download-url` **hết mock**: wallpaper free → presigned URL thật hết hạn ≤5 phút (⚠️ domain S3/R2 endpoint, KHÁC domain CDN của `thumbnail_url`/`preview_video_url` — client không hardcode/so sánh domain); premium giữ nguyên `402` cho tới BE-005; wallpaper `processing`/`failed`/đã xóa → `404`. `POST /admin/wallpapers`: `422 FILE_REJECTED` bắn **đồng bộ** tại register khi file vượt 500 MB (HEAD check); lỗi nội dung file phát hiện bất đồng bộ → `status=failed` (không 422). **Không error code mới**. Bỏ server "Staging" khỏi openapi (kỷ luật 2-flavor).
 >
 > **Đổi so với v0.3.1**: `GET /tags` giờ chèn **tag ảo "Tất cả"** (`{ id: 0, slug: "all", name: "Tất cả", wallpaper_count: <tổng published> }`) ở đầu mảng — do API sinh, KHÔNG lưu DB, làm chip mặc định "lấy toàn bộ". Slug `all` là **reserved**: `GET /wallpapers?tags=` bỏ qua slug `all` (không ràng buộc tag). Không thêm endpoint/error code nào; không đổi schema Wallpaper.
 >
@@ -185,8 +187,8 @@ Format chung:
 
 ### `GET /wallpapers/{id}/download-url`
 - Header: `X-App-Key` · Path: `id` · Query: `transaction_id` (bắt buộc nếu premium)
-- **200**: `{ "download_url": "https://cdn.../101.mp4?X-Amz-Signature=...", "expires_at": "2026-07-22T10:35:00Z" }`
-- **402**: `ENTITLEMENT_REQUIRED` · **404**: `NOT_FOUND` · **401**: `INVALID_APP_KEY`
+- **200** (v0.4.0 — presigned thật): `{ "download_url": "https://<s3-r2-endpoint>/masters/<uuid>.mp4?X-Amz-Signature=...", "expires_at": "..." }` — hết hạn **≤ 5 phút**, chỉ 1 object. ⚠️ Domain là **S3/R2 endpoint**, KHÁC domain CDN của thumbnail/preview — client không hardcode/so sánh domain.
+- **402**: `ENTITLEMENT_REQUIRED` (mọi wallpaper premium — gate mở ở BE-005) · **404**: `NOT_FOUND` (không tồn tại, `processing`, `failed`, hoặc đã xóa) · **401**: `INVALID_APP_KEY`
 
 ---
 
@@ -216,6 +218,18 @@ Format chung:
 
 ## Admin Endpoints
 
+### `POST /admin/auth/login`
+- Không header auth — credential trong body. KHÔNG nhận `X-App-Key` (2 tầng tách tuyệt đối).
+- **Body**: `{ "username": "...", "password": "..." }` (Django staff user — không có hệ thống user app)
+- **200**: `{ "access": "<jwt 30 phút>", "refresh": "<token 7 ngày>", "expires_in": 1800 }`
+- **401**: `UNAUTHORIZED_ADMIN` (sai username/password) · **403**: `FORBIDDEN_ADMIN_ROLE` (đúng credential nhưng không phải staff hoặc tài khoản bị khoá)
+- Mọi attempt (thành công/thất bại) đều được audit; password không bao giờ được ghi log.
+
+### `POST /admin/auth/refresh`
+- **Body**: `{ "refresh": "<refresh token còn hạn>" }`
+- **200**: cùng schema login — cặp token **MỚI** (rotate); refresh cũ bị blacklist ngay, dùng lại → 401.
+- **401**: `UNAUTHORIZED_ADMIN` (hết hạn / đã rotate / blacklist)
+
 ### `POST /admin/uploads/presign`
 - Header: `Authorization: Bearer <admin_jwt>`
 - **Body**: `{ "filename": "neon-city-loop.mp4", "content_type": "video/mp4" }`
@@ -239,13 +253,14 @@ Format chung:
 ```
   - `tag_ids` **curated** — phải trỏ tới tag đã tồn tại; muốn tag mới, gọi `POST /admin/tags` trước.
 - **201**: object `Wallpaper`, các field media (`thumbnail_url`, `resolution`...) = `null` vì đang xử lý bất đồng bộ
-- **400**: `VALIDATION_ERROR` (thiếu field, `category_id` không tồn tại), `TAG_NOT_FOUND` (tag_ids sai)
-- **422**: `FILE_REJECTED` · **401**: `UNAUTHORIZED_ADMIN` · **403**: `FORBIDDEN_ADMIN_ROLE`
+- **400**: `VALIDATION_ERROR` (thiếu field, `category_id` không tồn tại, `upload_key` đã dùng hoặc object chưa upload), `TAG_NOT_FOUND` (tag_ids sai)
+- **422**: `FILE_REJECTED` — bắn **đồng bộ** khi HEAD thấy file vượt 500 MB. Lỗi nội dung (sai định dạng thật; malware scan từ BE-006) phát hiện **bất đồng bộ** trong pipeline → `status=failed` + `failure_reason` (xem qua `GET /admin/wallpapers?status=failed`), không 422 lúc đó.
+- **401**: `UNAUTHORIZED_ADMIN` · **403**: `FORBIDDEN_ADMIN_ROLE`
 
 ### `GET /admin/wallpapers`
 - Header: `Authorization: Bearer <admin_jwt>`
 - Query: `cursor`, `limit`, `status` (`processing`|`published`|`failed`)
-- **200**: `WallpaperCursorPage` (bao gồm cả wallpaper chưa publish)
+- **200**: `WallpaperCursorPage` (bao gồm cả wallpaper chưa publish); item tầng admin kèm thêm `status` và `failure_reason` (lý do khi `failed` — chỉ hiển thị ở tier admin, không bao giờ xuất hiện ở public tier)
 - **401**: `UNAUTHORIZED_ADMIN` · **403**: `FORBIDDEN_ADMIN_ROLE`
 
 ### `DELETE /admin/wallpapers/{id}`

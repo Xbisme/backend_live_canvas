@@ -9,6 +9,7 @@ NO hardcoded values here; flavors decide whether a sane local default is accepta
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -49,11 +50,14 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "rest_framework",
+    # Refresh-token rotation blacklist for the admin JWT tier (BE-004, Constitution II).
+    "rest_framework_simplejwt.token_blacklist",
     # Local
     "core",
     "apps.wallpapers",
     "apps.uploads",
     "apps.iap",
+    "apps.audit",
 ]
 
 # ---------------------------------------------------------------------------
@@ -147,6 +151,46 @@ AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
 # Public base URL a CDN serves objects from (used by later specs to build media URLs).
 CDN_BASE_URL = env("CDN_BASE_URL", default="")
+
+# Public-zone bucket (thumbs/previews/covers, served via CDN); the private zone
+# (staging + masters, presigned-only) reuses AWS_STORAGE_BUCKET_NAME (BE-004).
+AWS_PUBLIC_BUCKET_NAME = env("AWS_PUBLIC_BUCKET_NAME", default="")
+
+# ---------------------------------------------------------------------------
+# Admin JWT tier (BE-004 — Constitution II; lifetimes from spec clarify session)
+# ---------------------------------------------------------------------------
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# ---------------------------------------------------------------------------
+# Async media pipeline (BE-004 — Constitution VII)
+# ---------------------------------------------------------------------------
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="")
+CELERY_TASK_ALWAYS_EAGER = False  # tests flip this on for deterministic runs
+CELERY_TASK_EAGER_PROPAGATES = False
+# Ack AFTER execution: a worker killed mid-transcode redelivers instead of losing the
+# task. Safe because process_wallpaper is idempotent (master_key guard, FR-010).
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # long transcodes: don't hoard tasks per process
+# No result backend on purpose: task outcome is reflected in Wallpaper.status
+# (single source of truth — research D2).
+
+# Upload size ceiling in bytes (spec clarify: 500 MB).
+UPLOAD_MAX_BYTES = env.int("UPLOAD_MAX_BYTES", default=524_288_000)
+
+# Presigned URL lifetimes (seconds). Download ≤ 5 minutes per Constitution III.
+PRESIGNED_UPLOAD_TTL = 3600
+PRESIGNED_DOWNLOAD_TTL = 300
+
+# Bulk backfill (BE-004, operator machine only): local dataset directory.
+BACKFILL_DATASET_DIR = env("BACKFILL_DATASET_DIR", default="")
 
 # ---------------------------------------------------------------------------
 # Logging level (flavors override handlers/formatters)

@@ -20,23 +20,22 @@ tiếp với Apple/Google, **không** dùng RevenueCat).
 
 ## ⚠️ Trạng thái hiện tại
 
-Repo đang ở giai đoạn **bootstrap** — mới có tài liệu (contract, roadmap,
-constitution) và scaffolding speckit. **Chưa có mã Django** (`manage.py`,
-`config/`, `apps/` chưa tồn tại).
-
-Phần **Setup & Run** dưới đây mô tả quy trình **sẽ có hiệu lực sau khi hoàn thành
-spec `BE-001` (Project Bootstrap & 2-Flavor Setup)**. Trước khi BE-001 merge, các
-lệnh `python manage.py …` chưa chạy được.
+Đã ship: **BE-001** (bootstrap 2-flavor) · **BE-002** (DRF foundation, X-App-Key,
+error envelope) · **BE-003** (public content API + seed 397 wallpaper thật) ·
+**BE-004** (admin JWT tier, storage 2 vùng MinIO/R2, pipeline Celery+ffmpeg,
+admin CRUD + audit log, bulk backfill, download-url presigned thật).
+Kế tiếp: **BE-005** (IAP verify & entitlement).
 
 ---
 
 ## Yêu cầu môi trường
 
 - **Python** 3.11+
-- **PostgreSQL** 14+ (khuyến nghị; `dev` có thể dùng SQLite tuỳ chọn)
-- **Redis** (cho Celery — dùng ở pipeline upload, BE-004 trở đi)
-- **ffmpeg** và **ClamAV** (transcode + malware scan; chỉ cần khi chạy pipeline)
-- Tài khoản S3-compatible + CDN (chỉ cần cho `prod`; `dev` có thể dùng MinIO local)
+- **PostgreSQL** 14+ — `docker compose up -d db`
+- **Redis** (broker Celery) — `docker compose up -d redis` (host port **6380**)
+- **MinIO** (storage 2 vùng cho dev) — `docker compose up -d minio` (bucket tự tạo qua `minio-init`; console http://localhost:9001)
+- **ffmpeg** + **libmagic** (transcode + MIME sniffing): `brew install ffmpeg libmagic` (macOS) / `apt install ffmpeg libmagic1` (Linux). Watermark chữ trên preview cần build ffmpeg có **libfreetype** (bản brew đầy đủ); build thiếu sẽ tự fallback sang dải mờ `drawbox`. ClamAV: hoãn tới BE-006.
+- Tài khoản S3-compatible + CDN (chỉ cần cho `prod` — Cloudflare R2; `dev` dùng MinIO local)
 
 ---
 
@@ -104,13 +103,18 @@ python manage.py collectstatic --noinput
 gunicorn config.wsgi:application            # ví dụ WSGI server
 ```
 
-### Celery worker (pipeline upload — BE-004+)
+### Celery worker (pipeline upload — BE-004)
 
 ```bash
-# dev
-celery -A config worker -l info
-# (nếu cần) beat cho task định kỳ
-celery -A config beat -l info
+celery -A config worker -l info     # cùng codebase với API; broker theo CELERY_BROKER_URL
+```
+
+### Nội dung & vận hành (BE-004)
+
+```bash
+python manage.py seed_content        # nạp catalog 397 wallpaper từ fixture
+python manage.py backfill_media      # upload dataset local → storage + chạy pipeline (idempotent, resumable)
+python manage.py purge_stale_uploads # liệt kê slot upload mồ côi >24h (--delete để xóa)
 ```
 
 ---

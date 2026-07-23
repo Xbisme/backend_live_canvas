@@ -54,10 +54,14 @@ MIDDLEWARE = [
 # ---------------------------------------------------------------------------
 # Read the required storage/CDN values with NO default (spec FR-011). Provider-agnostic:
 # region/endpoint are optional (AWS uses region; R2/Spaces use an endpoint).
-AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")  # private zone (staging + masters)
+AWS_PUBLIC_BUCKET_NAME = env("AWS_PUBLIC_BUCKET_NAME")  # public zone (thumbs/previews/covers)
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
 CDN_BASE_URL = env("CDN_BASE_URL")
+
+# Async media pipeline broker (BE-004) — required, no default (fail-fast).
+CELERY_BROKER_URL = env("CELERY_BROKER_URL")
 
 STORAGES = {
     "default": {

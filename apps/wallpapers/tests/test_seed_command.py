@@ -1,8 +1,11 @@
 """Polish — seed_content management command. Spec FR-016."""
 
+import json
+
 import pytest
 from django.core.management import call_command
 
+from apps.wallpapers.management.commands.seed_content import FIXTURE
 from apps.wallpapers.models import Collection, CollectionItem, Tag, Wallpaper
 
 pytestmark = pytest.mark.django_db
@@ -27,6 +30,11 @@ def test_seed_sets_provenance_and_no_reserved_tag():
 
 def test_seed_preserves_collection_order():
     call_command("seed_content")
-    col = Collection.objects.get(slug="neon-nights")
-    ordered = list(col.items.order_by("position").values_list("wallpaper__title", flat=True))
-    assert ordered == ["Shibuya 2099", "Neon City Loop"]
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    source_by_key = {w["key"]: w["source_url"] for w in data["wallpapers"]}
+    for row in data["collections"]:
+        col = Collection.objects.get(slug=row["slug"])
+        ordered = list(
+            col.items.order_by("position").values_list("wallpaper__source_url", flat=True)
+        )
+        assert ordered == [source_by_key[key] for key in row["items"]]

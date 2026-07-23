@@ -91,10 +91,10 @@ class WallpaperBatchView(AppTierAPIView):
 
 
 class WallpaperDownloadUrlView(AppTierAPIView):
-    """GET /wallpapers/{id}/download-url — temporary edge (spec FR-012).
+    """GET /wallpapers/{id}/download-url — the entitlement edge (contract v0.4.0).
 
-    Non-premium → 200 mock URL; premium → 402 ENTITLEMENT_REQUIRED; missing/hidden → 404.
-    Real entitlement + presigning arrive in BE-005.
+    Free → 200 with a real presigned GET (≤ 5 min, single object); premium → 402
+    ENTITLEMENT_REQUIRED until BE-005; missing/hidden/not-yet-self-hosted → 404.
     """
 
     def get(self, request: Request, pk: int) -> Response:
