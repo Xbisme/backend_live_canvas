@@ -1,6 +1,6 @@
 # Base runtime dependencies (shared by all flavors).
 # Versions verified on PyPI 2026-07-23 (Constitution XI — Dependency Hygiene).
-# Compile with: uv pip compile requirements/base.in -o requirements/base.txt
+# Compile with: uv pip compile requirements/base.in -o requirements/base.txt --universal --python-version 3.11
 
 Django>=5.2,<5.3            # 5.2 LTS (supported through Apr 2028); latest patch 5.2.16
 djangorestframework==3.17.1
