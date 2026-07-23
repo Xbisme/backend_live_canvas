@@ -1,0 +1,711 @@
+openapi: 3.0.3
+info:
+  title: LiveCanvas API
+  description: >
+    API cho app hình nền động (public wallpaper/tag/category endpoints,
+    admin upload, admin tag/collection management, IAP verify-receipt tự viết).
+    Được suy ra từ docs/screen-inventory.md — mọi thay đổi màn hình phải
+    cập nhật file đó trước.
+  version: "0.3.0"
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production
+  - url: https://staging-api.example.com/v1
+    description: Staging
+
+tags:
+  - name: Public
+  - name: Admin
+  - name: IAP
+
+security:
+  - AppApiKey: []
+
+components:
+  securitySchemes:
+    AppApiKey:
+      type: apiKey
+      in: header
+      name: X-App-Key
+    AdminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    CursorParam:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: >
+        Opaque cursor trả về từ response trước (`next_cursor`). Bỏ trống để
+        lấy trang đầu tiên.
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+    CategoryParam:
+      name: category
+      in: query
+      schema: { type: string }
+      description: Slug category để lọc
+    TagsParam:
+      name: tags
+      in: query
+      schema: { type: string }
+      description: >
+        Danh sách slug tag, phân tách bằng dấu phẩy (vd "neon,night").
+        Kết quả phải khớp TẤT CẢ tag được liệt kê (AND, không phải OR).
+    OrientationParam:
+      name: orientation
+      in: query
+      schema:
+        type: string
+        enum: [portrait, landscape, square]
+
+  schemas:
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string, example: "nature" }
+        name: { type: string, example: "Thiên nhiên" }
+        icon_url: { type: string, format: uri }
+        wallpaper_count: { type: integer }
+
+    Tag:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string, example: "neon" }
+        name: { type: string, example: "Neon" }
+        wallpaper_count: { type: integer }
+
+    Wallpaper:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/Tag' }
+        orientation:
+          type: string
+          enum: [portrait, landscape, square]
+        thumbnail_url: { type: string, format: uri }
+        preview_video_url:
+          type: string
+          format: uri
+          description: Video preview độ phân giải thấp, watermark nhẹ, public cho mọi wallpaper
+        is_premium: { type: boolean }
+        resolution: { type: string, example: "1080x1920", nullable: true }
+        duration_seconds: { type: number, nullable: true }
+        file_size_bytes: { type: integer, nullable: true }
+        download_count: { type: integer }
+        like_count: { type: integer }
+        source_url: { type: string, format: uri }
+        license_type: { type: string, example: "Pixabay License" }
+        collections:
+          type: array
+          description: >
+            (Các) bộ sưu tập chứa wallpaper này — mini ref để màn Detail nhảy vào bộ.
+            Đảm bảo populate ở GET /wallpapers/{id}; ở list lớn có thể rỗng để tiết kiệm payload.
+          items: { $ref: '#/components/schemas/CollectionRef' }
+        created_at: { type: string, format: date-time }
+
+    CollectionRef:
+      type: object
+      description: Mini ref của Collection (nhúng trong Wallpaper.collections)
+      properties:
+        id: { type: integer }
+        slug: { type: string, example: "neon-nights" }
+        title: { type: string, example: "Neon về đêm" }
+        cover_url: { type: string, format: uri }
+        is_premium: { type: boolean }
+
+    Collection:
+      type: object
+      description: Bộ sưu tập curated — tập hợp wallpaper có thứ tự (many-to-many với Wallpaper)
+      properties:
+        id: { type: integer }
+        slug: { type: string, example: "neon-nights" }
+        title: { type: string, example: "Neon về đêm" }
+        author: { type: string, example: "tokyo" }
+        description: { type: string }
+        cover_url: { type: string, format: uri }
+        accent_color:
+          type: string
+          nullable: true
+          example: "#FF6F9C"
+          description: Màu nhấn (hex) cho chrome/glow màn Collection Detail
+        is_premium: { type: boolean }
+        wallpaper_count: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    CollectionDetail:
+      description: Collection kèm danh sách wallpaper thành viên đúng thứ tự curate
+      allOf:
+        - $ref: '#/components/schemas/Collection'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Wallpaper' }
+
+    WallpaperCursorPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Wallpaper' }
+        next_cursor:
+          type: string
+          nullable: true
+          description: Truyền lại vào `cursor` để lấy trang tiếp theo. null = hết dữ liệu.
+        has_more: { type: boolean }
+
+    WallpaperBatchRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items: { type: integer }
+          maxItems: 100
+          description: Tối đa 100 ID mỗi lần gọi
+
+    DownloadUrlResponse:
+      type: object
+      properties:
+        download_url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: "ENTITLEMENT_REQUIRED" }
+            message: { type: string }
+
+    VerifyReceiptRequest:
+      type: object
+      required: [platform, receipt_data, transaction_id]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        receipt_data: { type: string }
+        transaction_id: { type: string }
+        product_id: { type: string, example: "premium_monthly" }
+        device_id: { type: string }
+
+    SubscriptionStatus:
+      type: object
+      properties:
+        transaction_id: { type: string }
+        product_id: { type: string }
+        status:
+          type: string
+          enum: [active, expired, canceled, in_grace_period, refunded]
+        expires_at: { type: string, format: date-time, nullable: true }
+        auto_renew: { type: boolean }
+
+    AppleServerNotification:
+      type: object
+      properties:
+        signedPayload: { type: string }
+
+    GoogleRtdnNotification:
+      type: object
+      properties:
+        message:
+          type: object
+          properties:
+            data: { type: string }
+            messageId: { type: string }
+
+    AdminWallpaperCreateRequest:
+      type: object
+      required: [title, category_id, orientation, upload_key]
+      properties:
+        title: { type: string }
+        category_id: { type: integer }
+        tag_ids:
+          type: array
+          items: { type: integer }
+          description: Curated — phải là ID tag đã tồn tại, tạo tag mới qua /admin/tags trước
+        orientation: { type: string, enum: [portrait, landscape, square] }
+        is_premium: { type: boolean, default: false }
+        source_url: { type: string, format: uri }
+        license_type: { type: string }
+        upload_key: { type: string }
+
+    AdminTagCreateRequest:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string, example: "neon" }
+        name: { type: string, example: "Neon" }
+
+    AdminCollectionCreateRequest:
+      type: object
+      required: [slug, title]
+      properties:
+        slug: { type: string, example: "neon-nights" }
+        title: { type: string, example: "Neon về đêm" }
+        author: { type: string, example: "tokyo" }
+        description: { type: string }
+        cover_upload_key:
+          type: string
+          nullable: true
+          description: upload_key ảnh cover (lấy từ POST /admin/uploads/presign)
+        accent_color: { type: string, nullable: true, example: "#FF6F9C" }
+        is_premium: { type: boolean, default: false }
+        wallpaper_ids:
+          type: array
+          items: { type: integer }
+          description: Danh sách wallpaper có thứ tự — phải trỏ tới wallpaper đã tồn tại
+
+    AdminCollectionUpdateRequest:
+      type: object
+      description: Mọi field optional — chỉ cập nhật field được truyền. wallpaper_ids thay thế toàn bộ danh sách theo thứ tự mới.
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        author: { type: string }
+        description: { type: string }
+        cover_upload_key: { type: string }
+        accent_color: { type: string, nullable: true }
+        is_premium: { type: boolean }
+        wallpaper_ids:
+          type: array
+          items: { type: integer }
+
+    PresignedUploadRequest:
+      type: object
+      required: [filename, content_type]
+      properties:
+        filename: { type: string }
+        content_type: { type: string, example: "video/mp4" }
+
+    PresignedUploadResponse:
+      type: object
+      properties:
+        upload_url: { type: string, format: uri }
+        upload_key: { type: string }
+        expires_at: { type: string, format: date-time }
+
+paths:
+  /categories:
+    get:
+      tags: [Public]
+      summary: Danh sách category (không phân trang — số lượng nhỏ, admin curate)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+
+  /tags:
+    get:
+      tags: [Public]
+      summary: Danh sách tag curated (không phân trang — dùng cho filter chips + admin chọn)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+
+  /collections:
+    get:
+      tags: [Public]
+      summary: Danh sách bộ sưu tập curated (không phân trang — chỉ meta, không nhúng items)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Collection' }
+
+  /collections/{id}:
+    get:
+      tags: [Public]
+      summary: Chi tiết 1 bộ sưu tập + danh sách wallpaper thành viên (đúng thứ tự, không phân trang)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionDetail' }
+        '404':
+          description: Not found
+
+  /wallpapers:
+    get:
+      tags: [Public]
+      summary: Danh sách wallpaper — cursor pagination, filter category/tags/orientation/search
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CategoryParam'
+        - $ref: '#/components/parameters/TagsParam'
+        - $ref: '#/components/parameters/OrientationParam'
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: is_premium
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WallpaperCursorPage' }
+        '400':
+          description: Validation error (vd cursor không hợp lệ, limit > 100)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /wallpapers/batch:
+    post:
+      tags: [Public]
+      summary: Lấy lại data mới nhất cho nhiều wallpaper theo ID (dùng cho màn Favorites)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WallpaperBatchRequest' }
+      responses:
+        '200':
+          description: >
+            OK — trả về các wallpaper còn tồn tại (ID không tìm thấy sẽ bị
+            bỏ qua âm thầm, không lỗi)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Wallpaper' }
+        '400':
+          description: ids rỗng hoặc vượt quá 100
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /wallpapers/{id}:
+    get:
+      tags: [Public]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Wallpaper' }
+        '404':
+          description: Not found
+
+  /wallpapers/{id}/download-url:
+    get:
+      tags: [Public]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: transaction_id
+          in: query
+          schema: { type: string }
+          description: Bắt buộc nếu wallpaper.is_premium = true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DownloadUrlResponse' }
+        '402':
+          description: Cần mua/gia hạn premium
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+
+  /iap/verify-receipt:
+    post:
+      tags: [IAP]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyReceiptRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionStatus' }
+        '400':
+          description: Receipt không hợp lệ
+        '409':
+          description: Receipt đã được dùng bởi transaction_id/device khác
+        '503':
+          description: App Store/Google Play API tạm không phản hồi
+
+  /iap/subscription-status:
+    get:
+      tags: [IAP]
+      parameters:
+        - name: transaction_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionStatus' }
+        '404':
+          description: Not found
+
+  /iap/webhook/apple:
+    post:
+      tags: [IAP]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppleServerNotification' }
+      responses:
+        '200':
+          description: Đã nhận và xử lý
+
+  /iap/webhook/google:
+    post:
+      tags: [IAP]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GoogleRtdnNotification' }
+      responses:
+        '200':
+          description: Đã nhận và xử lý
+
+  /admin/uploads/presign:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PresignedUploadRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PresignedUploadResponse' }
+
+  /admin/wallpapers:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Tạo wallpaper — tag_ids phải trỏ tới tag đã tồn tại (curated, xem /admin/tags)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminWallpaperCreateRequest' }
+      responses:
+        '201':
+          description: Đã tạo, đang xử lý bất đồng bộ (transcode/scan)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Wallpaper' }
+        '400':
+          description: Dữ liệu không hợp lệ, hoặc tag_ids chứa ID không tồn tại
+        '422':
+          description: File không qua được kiểm tra (sai định dạng/nhiễm mã độc)
+    get:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema: { type: string, enum: [processing, published, failed] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WallpaperCursorPage' }
+
+  /admin/wallpapers/{id}:
+    delete:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Đã xóa (soft delete)
+        '404':
+          description: Not found
+
+  /admin/tags:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Tạo tag mới (curated — đây là cách DUY NHẤT để thêm tag)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminTagCreateRequest' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+        '409':
+          description: slug đã tồn tại
+    get:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Danh sách tag kèm wallpaper_count, để admin quyết định xóa tag nào
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+
+  /admin/tags/{id}:
+    delete:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Xóa tag (chặn nếu vẫn còn wallpaper đang dùng — trả 409)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Đã xóa
+        '404':
+          description: Not found
+        '409':
+          description: Vẫn còn wallpaper đang dùng tag này
+
+  /admin/collections:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Tạo bộ sưu tập — wallpaper_ids có thứ tự, phải trỏ tới wallpaper đã tồn tại
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCollectionCreateRequest' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Collection' }
+        '400':
+          description: Dữ liệu không hợp lệ, hoặc wallpaper_ids chứa ID không tồn tại
+        '409':
+          description: slug đã tồn tại
+    get:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Danh sách bộ sưu tập (meta + wallpaper_count, không nhúng items, không phân trang)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Collection' }
+
+  /admin/collections/{id}:
+    patch:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Sửa meta hoặc thêm/bớt/sắp xếp wallpaper (wallpaper_ids thay thế toàn bộ danh sách)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCollectionUpdateRequest' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Collection' }
+        '400':
+          description: Dữ liệu không hợp lệ, hoặc wallpaper_ids chứa ID không tồn tại
+        '404':
+          description: Not found
+        '409':
+          description: slug đã tồn tại
+    delete:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: Xóa bộ sưu tập (không xóa wallpaper thành viên)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Đã xóa
+        '404':
+          description: Not found

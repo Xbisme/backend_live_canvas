@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Django
+*.log
+*.sqlite3
+db.sqlite3
+/staticfiles/
+/mediafiles/
+/media/
+
+# Environment / secrets — commit ONLY the .example files
+.env
+.env.dev
+.env.prod
+*.env
+!.env.dev.example
+!.env.prod.example
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Tooling
+.ruff_cache/
+.mypy_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
