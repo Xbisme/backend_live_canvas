@@ -1,0 +1,36 @@
+[project]
+name = "livecanvas-backend"
+version = "0.1.0"
+description = "LiveCanvas backend — Django + DRF API for the live-wallpaper app"
+requires-python = ">=3.12"
+# Runtime/dev dependencies are managed via requirements/*.{in,txt} (compiled with uv),
+# per the project constitution (Dependency Hygiene). Do not list them here.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "DJ",   # flake8-django
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",  # line length handled by the formatter
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "core"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.dev"
+python_files = ["test_*.py", "tests.py"]
+testpaths = ["core"]
+addopts = "-ra"

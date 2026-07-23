@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: livecanvas
+          POSTGRES_PASSWORD: livecanvas
+          POSTGRES_DB: livecanvas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U livecanvas -d livecanvas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      SECRET_KEY: ci-insecure-secret
+      DATABASE_URL: postgres://livecanvas:livecanvas@localhost:5432/livecanvas
+      ALLOWED_HOSTS: localhost,127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies (dev flavor, pinned)
+        run: |
+          uv venv
+          uv pip sync requirements/dev.txt
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest
