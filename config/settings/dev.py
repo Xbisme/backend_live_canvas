@@ -18,7 +18,14 @@ DEBUG = True
 
 SECRET_KEY = env("SECRET_KEY", default="dev-insecure-change-me")
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "*"])
+# Dev-only server (DEBUG=True, never production): accept any Host header so the
+# Android emulator, a real device on the LAN, or ngrok can all reach it without
+# re-listing IPs. `.env.dev` ALLOWED_HOSTS is intentionally ignored here.
+ALLOWED_HOSTS = ["*"]
+
+# Rewrite loopback (localhost:9000) media URLs to the caller's host so phones /
+# emulators on the LAN can actually load thumbs/previews/covers. Dev-only.
+MIDDLEWARE = [*MIDDLEWARE, "core.middleware.DevMediaHostRewriteMiddleware"]  # noqa: F405
 
 # Local Postgres from docker-compose.yml (parity with prod engine).
 DATABASES = {
