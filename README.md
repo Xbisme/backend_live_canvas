@@ -89,9 +89,16 @@ python manage.py runserver
 ### Dev
 
 ```bash
-# manage.py mặc định dev — không cần set gì thêm
+# manage.py mặc định dev — không cần set gì thêm.
+# runserver tự bind 0.0.0.0:8000 → emulator (10.0.2.2) và máy thật (IP LAN)
+# đều vào được. Muốn đổi: python manage.py runserver 127.0.0.1:9000
 python manage.py runserver
 ```
+
+> **Test app trên máy thật (điện thoại cùng Wi-Fi):** lấy IP LAN của máy chạy
+> backend (`ipconfig getifaddr en0` trên macOS), rồi build app Flutter với
+> `--dart-define=API_HOST=<IP đó>`. macOS có thể hỏi cho phép kết nối đến — chọn
+> Allow. Firewall phải mở port 8000.
 
 ### Prod
 

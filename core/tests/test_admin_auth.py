@@ -25,9 +25,12 @@ def test_login_success_shape(admin_user):
     body = res.json()
     assert set(body) == {"access", "refresh", "expires_in"}
     assert body["expires_in"] == 30 * 60  # access lifetime — clarify Q2
-    # Token carries the configured 30-minute lifetime.
+    # Token carries the configured 30-minute lifetime. simplejwt reads the clock twice
+    # (once for `iat`, once for the `exp` base) and truncates each to whole seconds, so
+    # the delta can land on 1799 when those reads straddle a second boundary — assert the
+    # lifetime with a 1s tolerance rather than exact equality.
     token = AccessToken(body["access"])
-    assert token["exp"] - token["iat"] == 30 * 60
+    assert abs((token["exp"] - token["iat"]) - 30 * 60) <= 1
 
 
 def test_login_wrong_password_is_401(admin_user):
