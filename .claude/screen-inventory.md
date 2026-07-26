@@ -4,7 +4,7 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (đồng bộ tay giống `api-context.md`).
 >
-> Last updated: 2026-07-23 · Contract version tương ứng: `v0.3.2`
+> Last updated: 2026-07-26 · Contract version tương ứng: `v0.5.0`
 
 ---
 
@@ -20,7 +20,7 @@
 | 6 | **Collection Detail** (1 bộ sưu tập curated) | Meta collection (cover_url, accent_color, title, author, description, is_premium, wallpaper_count) + **danh sách wallpaper thuộc bộ** (đúng thứ tự curate) | Tap wallpaper → Detail, Favorite toggle, "Tải tất cả", "Mở khoá bộ sưu tập" nếu premium & chưa mua | `GET /collections/{id}` |
 | 7 | **Wallpaper Detail** | Full info + preview_video_url, license info, danh sách tag đầy đủ, **(các) bộ sưu tập chứa wallpaper này** (để nhảy tới Collection Detail) | Play preview, Favorite toggle, Tải/Set (trigger download-url), Mua nếu premium, tap "Từ bộ sưu tập ·…" → Collection Detail | `GET /wallpapers/{id}`, `GET /wallpapers/{id}/download-url` |
 | 8 | **Favorites** | List wallpaper đã lưu local (theo ID) — cần fetch lại data mới nhất mỗi lần mở | Bỏ favorite, tap → Detail | `POST /wallpapers/batch` |
-| 9 | **Paywall/Premium** | Danh sách gói (giá lấy từ Store, KHÔNG từ backend) | Mua, Restore purchase, gửi receipt verify | `POST /iap/verify-receipt` |
+| 9 | **Paywall/Premium** | Danh sách gói (giá lấy từ Store, KHÔNG từ backend) + trạng thái subscription hiện tại (nếu đã có `transaction_id` lưu local) | Mua, Restore purchase, gửi receipt verify, kiểm tra lại trạng thái khi mở màn | `POST /iap/verify-receipt`, `GET /iap/subscription-status` |
 | 10 | **Set Wallpaper Confirm** (Android) / **Hướng dẫn Shortcuts** (iOS) | Không cần thêm API — dùng `download_url` đã có từ Detail | Native action | — |
 | 11 | **Admin: Upload Wallpaper** | Danh sách category + tag có sẵn để chọn | Chọn file, chọn category, chọn tag (curated — không gõ tự do), submit | `GET /admin/tags` hoặc `GET /tags`, `POST /admin/uploads/presign`, `POST /admin/wallpapers` |
 | 12 | **Admin: Quản lý Tag** | Danh sách tag + số wallpaper đang dùng mỗi tag | Tạo tag mới, xóa tag không dùng | `GET /admin/tags`, `POST /admin/tags`, `DELETE /admin/tags/{id}` |
@@ -41,7 +41,14 @@
   - `Wallpaper` thêm field `collections: CollectionRef[]` (mini: id/slug/title/cover_url/is_premium) để Detail nhảy vào bộ. Chỉ đảm bảo populate ở `GET /wallpapers/{id}`; ở list lớn có thể rỗng để tiết kiệm payload (client Detail luôn có dữ liệu cần).
 
 - **Admin auth (v0.4.0)**: các màn admin #11–13 xác thực bằng **Bearer JWT** (access 30 phút / refresh 7 ngày rotate) đổi từ credential staff qua `POST /admin/auth/login` — tách tuyệt đối khỏi `X-App-Key` của app end-user. Backend không thêm hệ thống user mới: tài khoản admin là Django staff user sẵn có.
-- **Download thật (v0.4.0)**: `GET /wallpapers/{id}/download-url` từ v0.4.0 trả **presigned URL thật** (hết hạn ≤5 phút) cho wallpaper free thay vì mock; premium tiếp tục `402` cho tới khi IAP verify (BE-005). Lưu ý client: domain của `download_url` (S3/R2 endpoint) **khác** domain thumbnail/preview (CDN) — không hardcode/so sánh domain.
+- **Download thật (v0.4.0)**: `GET /wallpapers/{id}/download-url` từ v0.4.0 trả **presigned URL thật** (hết hạn ≤5 phút) cho wallpaper free thay vì mock. Lưu ý client: domain của `download_url` (S3/R2 endpoint) **khác** domain thumbnail/preview (CDN) — không hardcode/so sánh domain.
+- **Entitlement thật (v0.5.0)**: gate premium ở `download-url` đã hết vô điều kiện — client gửi `transaction_id` (query) và backend tra entitlement thật.
+  - **Client cần lưu bền `transaction_id`** (đã verify thành công) ở local, và gửi kèm ở **mọi** `GET /wallpapers/{id}/download-url` của wallpaper premium (kể cả từng item trong "Tải tất cả" ở bộ premium). Free thì bỏ qua field này.
+  - Entitlement định danh theo **original transaction id** của store → mọi `transaction_id` trong chuỗi renewal đều tra ra đúng 1 entitlement; client KHÔNG cần cập nhật id đã lưu sau mỗi kỳ gia hạn.
+  - **Còn quyền tải** khi `status ∈ {active, in_grace_period}` và chưa quá `expires_at`. `in_grace_period` (store đang retry thu tiền) vẫn tải được — client KHÔNG tự chặn. Tắt auto-renew mà còn trong kỳ → `status=active` + `auto_renew=false`, vẫn tải được (đừng coi là mất quyền).
+  - `402 ENTITLEMENT_REQUIRED` = chưa/không còn entitlement → điều hướng Paywall (#9). `404 NOT_FOUND` được đánh giá **trước** gate entitlement, nên 404 nghĩa là wallpaper không khả dụng chứ không phải thiếu quyền.
+  - **Restore trên máy mới**: chỉ cần verify lại receipt từ store → nhận lại `transaction_id`; `device_id` backend chỉ ghi nhận để phát hiện lạm dụng, KHÔNG chặn máy mới.
+  - Màn Paywall dùng `GET /iap/subscription-status?transaction_id=...` để hiển thị/refresh trạng thái (read-only, không gia hạn gì).
 
 ## Giả định chưa xác nhận (cần bạn confirm trước khi implement)
 
