@@ -15,3 +15,8 @@ celery[redis]==5.6.3          # async media pipeline (BE-004); broker Redis.
                               # redis client KHÔNG pin riêng: kombu 5.6 caps redis <6.5
                               # (PyPI redis 8.x chưa được kombu hỗ trợ) — bản exact chốt ở .txt lock
 python-magic==0.4.27          # magic-byte MIME sniffing (needs system libmagic)
+
+# --- IAP verify + entitlement (BE-005). Versions verified on PyPI 2026-07-26. ---
+app-store-server-library==3.1.2       # Apple App Store Server API client + V2 signed-notification JWS verify/decode
+google-api-python-client==2.198.0     # Google Play Developer API (androidpublisher subscriptionsv2)
+google-auth==2.56.2                   # service-account auth + Pub/Sub RTDN OIDC token verification

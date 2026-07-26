@@ -193,6 +193,36 @@ PRESIGNED_DOWNLOAD_TTL = 300
 BACKFILL_DATASET_DIR = env("BACKFILL_DATASET_DIR", default="")
 
 # ---------------------------------------------------------------------------
+# IAP verify + entitlement (BE-005 — Constitution II/VIII; secrets from env)
+# ---------------------------------------------------------------------------
+# base declares the env catalog with declared-not-required defaults so dev boots
+# without store credentials (sandbox ergonomics); prod reads the required ones with
+# NO default (fail-fast). Store environment is selected by these values, NOT by a
+# third settings flavor (Constitution VIII). NEVER log any of these (Constitution XI).
+
+# Apple — App Store Server API (JWT auth) + App Store Server Notifications V2.
+IAP_APPLE_ISSUER_ID = env("IAP_APPLE_ISSUER_ID", default="")
+IAP_APPLE_KEY_ID = env("IAP_APPLE_KEY_ID", default="")
+IAP_APPLE_PRIVATE_KEY = env.str("IAP_APPLE_PRIVATE_KEY", default="", multiline=True)  # .p8 contents
+IAP_APPLE_BUNDLE_ID = env("IAP_APPLE_BUNDLE_ID", default="")
+IAP_APPLE_APP_APPLE_ID = env.int("IAP_APPLE_APP_APPLE_ID", default=0)  # numeric App Store app id
+# "Production" or "Sandbox" — dev defaults to Sandbox, prod must set Production.
+IAP_APPLE_ENVIRONMENT = env("IAP_APPLE_ENVIRONMENT", default="Sandbox")
+# Directory of Apple root CA (.cer) files for JWS trust anchors; empty in dev/tests.
+IAP_APPLE_ROOT_CERTS_DIR = env("IAP_APPLE_ROOT_CERTS_DIR", default="")
+
+# Google — Play Developer API (service account) + RTDN via Pub/Sub push (OIDC verified).
+IAP_GOOGLE_PACKAGE_NAME = env("IAP_GOOGLE_PACKAGE_NAME", default="")
+IAP_GOOGLE_SERVICE_ACCOUNT_JSON = env.str(
+    "IAP_GOOGLE_SERVICE_ACCOUNT_JSON", default="", multiline=True
+)
+IAP_GOOGLE_PUBSUB_AUDIENCE = env("IAP_GOOGLE_PUBSUB_AUDIENCE", default="")
+
+# Bounded timeout (seconds) for a single outbound store verification call; on timeout
+# the verify endpoint returns 503 STORE_API_UNAVAILABLE (research D6).
+IAP_STORE_TIMEOUT_SECONDS = env.int("IAP_STORE_TIMEOUT_SECONDS", default=10)
+
+# ---------------------------------------------------------------------------
 # Logging level (flavors override handlers/formatters)
 # ---------------------------------------------------------------------------
 DJANGO_LOG_LEVEL = env("DJANGO_LOG_LEVEL", default="INFO")

@@ -146,9 +146,43 @@ class CollectionSlugConflict(AppError):
 
 class EntitlementRequired(AppError):
     """Premium content requested without an active entitlement — gated at the download edge
-    (Constitution III). In BE-003 premium always returns this until IAP verification lands in
-    BE-005; the code is part of the frozen catalog (contract v0.3.2)."""
+    (Constitution III). As of BE-005 this is raised when a premium wallpaper's ``transaction_id``
+    is missing or does not resolve to an entitlement in ``active``/``in_grace_period``."""
 
     error_code = ErrorCode.ENTITLEMENT_REQUIRED
     status_code = status.HTTP_402_PAYMENT_REQUIRED
     default_detail = "This wallpaper requires an active premium entitlement."
+
+
+class ReceiptInvalid(AppError):
+    """The store rejected the purchase proof during verification (BE-005, Constitution II)."""
+
+    error_code = ErrorCode.RECEIPT_INVALID
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "The purchase could not be verified with the store."
+
+
+class ReceiptConflict(AppError):
+    """A ``transaction_id`` is already bound to a different store subscription/account than the
+    proof resolves to — an identity mismatch, NOT merely a different device (BE-005, FR-007)."""
+
+    error_code = ErrorCode.RECEIPT_CONFLICT
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This transaction is already linked to a different subscription."
+
+
+class StoreApiUnavailable(AppError):
+    """Apple/Google verification service did not respond in time — retryable (BE-005, FR-006)."""
+
+    error_code = ErrorCode.STORE_API_UNAVAILABLE
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "The store service is temporarily unavailable. Please try again."
+
+
+class WebhookSignatureInvalid(AppError):
+    """A store notification failed signature/authenticity verification — the sole webhook auth
+    (BE-005, Constitution II). No entitlement state changes on this error (FR-010)."""
+
+    error_code = ErrorCode.WEBHOOK_SIGNATURE_INVALID
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "The notification signature could not be verified."

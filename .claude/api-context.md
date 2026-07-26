@@ -4,7 +4,9 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (`livecanvas-backend`, `livecanvas-mobile`). Khi API đổi, sửa cả `openapi.yaml` lẫn `api-context.md` ở repo đang implement, rồi copy nguyên văn sang repo còn lại (xem "Contract Sync" trong `dev-workflow.md`).
 >
-> Last updated: 2026-07-23 · Contract version: **`v0.4.0`**
+> Last updated: 2026-07-26 · Contract version: **`v0.5.0`**
+>
+> **Đổi so với v0.4.0 (BE-005)**: IAP verify + entitlement đi vào hoạt động thật. `GET /wallpapers/{id}/download-url` với wallpaper **premium** THÔI trả `402` vô điều kiện — nay kiểm tra entitlement thật từ `transaction_id` đã verify: entitled (`status ∈ {active, in_grace_period}`, chưa quá `expires_at`) → `200` presigned ≤5 phút; thiếu/hết hạn/không entitled → `402 ENTITLEMENT_REQUIRED`. Free giữ nguyên (bỏ qua `transaction_id`). Kích hoạt `POST /iap/verify-receipt`, `GET /iap/subscription-status`, `POST /iap/webhook/apple|google`. Entitlement **định danh theo original transaction id** (ổn định qua mọi kỳ renewal — mọi `transaction_id` trong chuỗi resolve về 1 entitlement); tắt auto-renew mà còn trong kỳ → `status=active, auto_renew=false`; `device_id` chỉ để phát hiện lạm dụng (restore trên máy mới tự do). **Không error code mới** (các mã IAP đã có sẵn trong catalog từ trước).
 >
 > **Đổi so với v0.3.2 (BE-004)**: thêm **admin auth surface** — `POST /admin/auth/login` (credential Django staff → JWT access 30 phút + refresh 7 ngày) và `POST /admin/auth/refresh` (rotate: trả cặp token MỚI, refresh cũ bị blacklist). `GET /wallpapers/{id}/download-url` **hết mock**: wallpaper free → presigned URL thật hết hạn ≤5 phút (⚠️ domain S3/R2 endpoint, KHÁC domain CDN của `thumbnail_url`/`preview_video_url` — client không hardcode/so sánh domain); premium giữ nguyên `402` cho tới BE-005; wallpaper `processing`/`failed`/đã xóa → `404`. `POST /admin/wallpapers`: `422 FILE_REJECTED` bắn **đồng bộ** tại register khi file vượt 500 MB (HEAD check); lỗi nội dung file phát hiện bất đồng bộ → `status=failed` (không 422). **Không error code mới**. Bỏ server "Staging" khỏi openapi (kỷ luật 2-flavor).
 >
@@ -188,21 +190,25 @@ Format chung:
 ### `GET /wallpapers/{id}/download-url`
 - Header: `X-App-Key` · Path: `id` · Query: `transaction_id` (bắt buộc nếu premium)
 - **200** (v0.4.0 — presigned thật): `{ "download_url": "https://<s3-r2-endpoint>/masters/<uuid>.mp4?X-Amz-Signature=...", "expires_at": "..." }` — hết hạn **≤ 5 phút**, chỉ 1 object. ⚠️ Domain là **S3/R2 endpoint**, KHÁC domain CDN của thumbnail/preview — client không hardcode/so sánh domain.
-- **402**: `ENTITLEMENT_REQUIRED` (mọi wallpaper premium — gate mở ở BE-005) · **404**: `NOT_FOUND` (không tồn tại, `processing`, `failed`, hoặc đã xóa) · **401**: `INVALID_APP_KEY`
+- **402**: `ENTITLEMENT_REQUIRED` — wallpaper premium mà `transaction_id` thiếu / hết hạn / không resolve tới entitlement đang active|in_grace_period (v0.5.0). Free bỏ qua check. · **404**: `NOT_FOUND` (không tồn tại, `processing`, `failed`, hoặc đã xóa — đánh giá **trước** gate entitlement) · **401**: `INVALID_APP_KEY`
 
 ---
 
 ## IAP Endpoints
 
+> **Entitlement model (v0.5.0)**: entitlement định danh theo **original transaction id** của store (ổn định qua mọi kỳ renewal); mọi `transaction_id` trong chuỗi renewal đều resolve về đúng 1 entitlement, nên verify/status/download tra bằng `transaction_id` kỳ nào cũng ra. `status` ∈ `active | in_grace_period | expired | canceled | refunded`. **Còn quyền tải** khi `status ∈ {active, in_grace_period}` và chưa quá `expires_at`. Tắt auto-renew mà còn trong kỳ → `active` + `auto_renew=false` (không phải `canceled`). `device_id` chỉ ghi nhận để phát hiện lạm dụng, KHÔNG chặn — restore trên máy mới verify lại bình thường.
+
 ### `POST /iap/verify-receipt`
-- Header: `X-App-Key`
-- **Body**: `{ "platform": "ios", "receipt_data": "...", "transaction_id": "1000000123456789", "product_id": "premium_monthly", "device_id": "device-uuid-abc123" }`
-- **200**: `{ "transaction_id": "...", "product_id": "premium_monthly", "status": "active", "expires_at": "2026-08-22T00:00:00Z", "auto_renew": true }`
-- **400**: `RECEIPT_INVALID` · **409**: `RECEIPT_CONFLICT` · **503**: `STORE_API_UNAVAILABLE` · **401**: `INVALID_APP_KEY`
+- Header: `X-App-Key` (app tier)
+- **Body**: `{ "platform": "ios", "receipt_data": "...", "transaction_id": "1000000123456789", "product_id": "premium_monthly", "device_id": "device-uuid-abc123" }` (`platform` ∈ `ios|android`)
+- Backend verify trực tiếp với App Store Server API / Google Play Developer API, upsert entitlement (idempotent theo original transaction id).
+- **200**: `{ "transaction_id": "...", "product_id": "premium_monthly", "status": "active", "expires_at": "2026-08-22T00:00:00Z", "auto_renew": true }` (schema `SubscriptionStatus`)
+- **400**: `RECEIPT_INVALID` (store từ chối) · **409**: `RECEIPT_CONFLICT` (`transaction_id` đã gắn subscription/tài khoản store khác — KHÔNG phải chỉ khác device) · **503**: `STORE_API_UNAVAILABLE` (store timeout/5xx, retryable) · **401**: `INVALID_APP_KEY`
 
 ### `GET /iap/subscription-status`
-- Header: `X-App-Key` · Query: `transaction_id` (bắt buộc)
-- **200**: cùng schema `SubscriptionStatus` · **404**: `NOT_FOUND` · **401**: `INVALID_APP_KEY`
+- Header: `X-App-Key` · Query: `transaction_id` (bắt buộc; chấp nhận bất kỳ id trong chuỗi renewal)
+- Read-only — KHÔNG mutate/gia hạn entitlement.
+- **200**: schema `SubscriptionStatus` · **404**: `NOT_FOUND` (không có entitlement nào) · **401**: `INVALID_APP_KEY`
 
 ### `POST /iap/webhook/apple`
 - Không `X-App-Key` — verify chữ ký JWS trong `signedPayload`

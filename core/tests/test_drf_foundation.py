@@ -17,7 +17,8 @@ from core.exception_handler import structured_exception_handler
 from core.pagination import EnvelopeCursorPagination
 
 _FEATURE_APPS = ["wallpapers", "uploads", "iap"]
-_STILL_MODEL_LESS = ["iap"]  # wallpapers has models as of BE-003; uploads as of BE-004
+# wallpapers has models as of BE-003; uploads as of BE-004; iap as of BE-005 — none remain.
+_STILL_MODEL_LESS: list[str] = []
 
 
 def test_feature_apps_registered() -> None:

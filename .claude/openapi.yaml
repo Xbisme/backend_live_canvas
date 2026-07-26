@@ -19,7 +19,16 @@ info:
     422 FILE_REJECTED bắn đồng bộ khi file vượt 500 MB (HEAD check); lỗi nội dung
     file surface bất đồng bộ qua wallpaper.status=failed. Không error code mới.
     Bỏ server "Staging" khỏi contract (kỷ luật 2-flavor dev/prod).
-  version: "0.4.0"
+
+    v0.5.0 (BE-005): IAP verify + entitlement đi vào hoạt động thật.
+    `GET /wallpapers/{id}/download-url` với wallpaper premium: THÔI trả 402 vô điều
+    kiện — nay kiểm tra entitlement thật từ `transaction_id` (đã verify), entitled →
+    200 presigned ≤5 phút, chưa/không entitled → 402 ENTITLEMENT_REQUIRED; free giữ
+    nguyên. Kích hoạt `POST /iap/verify-receipt`, `GET /iap/subscription-status`,
+    `POST /iap/webhook/apple|google`. Entitlement định danh theo original transaction
+    id (ổn định qua renewal); `in_grace_period` được coi là còn quyền; tắt auto-renew
+    mà còn trong kỳ → status=active, auto_renew=false. Không error code mới.
+  version: "0.5.0"
 
 servers:
   - url: https://api.example.com/v1
@@ -476,9 +485,11 @@ paths:
     get:
       tags: [Public]
       summary: >
-        Presigned URL thật (v0.4.0) — hết hạn ≤5 phút, chỉ 1 object. Domain là S3/R2
-        endpoint, KHÁC domain CDN của thumbnail/preview. Premium → 402 vô điều kiện
-        cho tới BE-005. Wallpaper đang processing/failed/đã xóa → 404.
+        Presigned URL thật — hết hạn ≤5 phút, chỉ 1 object. Domain là S3/R2 endpoint,
+        KHÁC domain CDN của thumbnail/preview. Free → 200 luôn. Premium (v0.5.0): cần
+        `transaction_id` resolve tới entitlement đang active/in_grace_period → 200;
+        thiếu/hết hạn/không entitled → 402. Wallpaper processing/failed/đã xóa → 404
+        (đánh giá trước gate entitlement).
       parameters:
         - name: id
           in: path
@@ -487,7 +498,7 @@ paths:
         - name: transaction_id
           in: query
           schema: { type: string }
-          description: Bắt buộc nếu wallpaper.is_premium = true
+          description: Bắt buộc nếu wallpaper.is_premium = true (bỏ qua nếu free)
       responses:
         '200':
           description: OK
