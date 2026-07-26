@@ -91,12 +91,14 @@ class WallpaperBatchView(AppTierAPIView):
 
 
 class WallpaperDownloadUrlView(AppTierAPIView):
-    """GET /wallpapers/{id}/download-url — the entitlement edge (contract v0.4.0).
+    """GET /wallpapers/{id}/download-url — the entitlement edge (contract v0.5.0).
 
-    Free → 200 with a real presigned GET (≤ 5 min, single object); premium → 402
-    ENTITLEMENT_REQUIRED until BE-005; missing/hidden/not-yet-self-hosted → 404.
+    Free → 200 with a real presigned GET (≤ 5 min, single object); premium → 200 only when
+    ``?transaction_id`` resolves to an active/in-grace entitlement, else 402
+    ENTITLEMENT_REQUIRED; missing/hidden/not-yet-self-hosted → 404 (before the gate).
     """
 
     def get(self, request: Request, pk: int) -> Response:
         wallpaper = services.get_published_or_404(pk)
-        return Response(services.build_download_url(wallpaper))
+        transaction_id = request.query_params.get("transaction_id", "").strip()
+        return Response(services.build_download_url(wallpaper, transaction_id))

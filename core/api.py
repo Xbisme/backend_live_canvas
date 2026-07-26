@@ -6,6 +6,7 @@ boundary is declared in exactly one place and never leaks onto the admin tier
 (Constitution II, V).
 """
 
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from core.authentication import AdminJWTAuthentication, AppKeyAuthentication
@@ -29,3 +30,14 @@ class AdminTierAPIView(APIView):
 
     authentication_classes = [AdminJWTAuthentication]
     permission_classes = [IsAdminStaff]
+
+
+class WebhookAPIView(APIView):
+    """Base view for store webhooks (BE-005) — authenticated ONLY by verifying the request's
+    signature/OIDC token in the view body, never by ``X-App-Key`` or an admin JWT
+    (Constitution II — webhooks carry no app/admin credential). Deliberately holds neither
+    tier's authentication/permission so the two tiers cannot leak onto this surface.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]

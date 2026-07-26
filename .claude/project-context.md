@@ -3,7 +3,7 @@
 > Repo: `livecanvas-backend` (Django + DRF)
 > Repo liên quan: `livecanvas-mobile` (Flutter, độc lập hoàn toàn — đồng bộ qua `contracts/openapi.yaml` + `.claude/api-context.md`, copy tay giữa 2 repo)
 >
-> Last updated: 2026-07-23 (BE-001→003 merged · **BE-004 implemented** trên branch `BE-004-admin-upload-pipeline` · contract **v0.4.0** · ✅ đã sync mobile 2026-07-23)
+> Last updated: 2026-07-26 (BE-001→**BE-004 merged** vào `main` — PR #4+#5 · **BE-005 IAP implemented** trên branch, contract **v0.5.0**, 196 tests xanh · Contract Sync v0.5.0 → mobile CÒN NỢ · spec tiếp theo: **BE-006 Security**)
 > **Mục đích**: Snapshot tối thiểu để bắt đầu 1 session làm việc trên repo backend.
 >
 > **Đọc file nào khi nào**:
@@ -24,14 +24,15 @@
 
 ## Current Focus
 
-- **Trạng thái**: BE-001→BE-003 đã merge vào `main`. **BE-004 đã implement đầy đủ** trên branch `BE-004-admin-upload-pipeline` (SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; toàn bộ tests xanh) — chờ quickstart end-to-end + review/merge.
+- **Trạng thái**: BE-001→**BE-004 đã merge vào `main`** (PR #4 + #5). **BE-005 IAP đã implement đầy đủ trên branch `BE-005-iap-verify-entitlement`** (SDD trọn chuỗi; contract **v0.5.0**; 34/36 task, 196 tests xanh, ruff/format sạch) — chờ Contract Sync v0.5.0 → mobile (T002, repo mobile vắng mặt khi implement) + review/merge. Spec tiếp theo: **BE-006 Security Hardening**.
 - **Đã có sẵn**:
   - Catalog thật: **397 wallpaper Pexels** (dataset local ~22.4 GB tại `~/Documents/database/crawl_script/livewallpapers`; metadata commit ở `data/crawl/`; fixture sinh bởi `scripts/build_seed_fixture.py` → `manage.py seed_content`). 5 categories / 21 curated tags / 83 premium / 5 collections.
   - Contract **v0.4.0** (`.claude/openapi.yaml` + `api-context.md`): + `POST /admin/auth/login|refresh` (JWT access 30'/refresh 7d rotate), download-url presigned thật ≤5' cho free (premium 402 tới BE-005), 422 FILE_REJECTED đồng bộ khi >500MB, bỏ server Staging.
   - BE-004 stack: admin tier (`AdminTierAPIView`/`AdminJWTAuthentication`/`IsAdminStaff` trong `core`), storage 2 vùng (bucket private staging+masters / public thumbs+previews+covers; MinIO dev qua docker-compose, R2 prod), pipeline Celery+Redis (magic-byte sniff → H.264 normalize → thumbnail → preview 720p watermark; state machine processing→published|failed, idempotent theo `master_key`), admin CRUD wallpapers/tags/collections + app `apps/audit` (append-only, sanitize guard), `backfill_media` + `purge_stale_uploads`.
   - ✅ **Đã sync `livecanvas-mobile`** (2026-07-23): contract v0.4.0 copy nguyên văn (openapi.yaml → `.claude/` + `contracts/`, api-context.md, screen-inventory.md) + ghi chú vào changelog mobile. Mobile cần regenerate `packages/livecanvas_api` và chuyển mock → API thật (MO-002).
-- **Việc còn treo của BE-004**: (1) chạy nốt `backfill_media` full 397 (đã verify 3 item thật end-to-end; resumable); (2) tạo bucket R2 + CDN khi lên prod.
-- **Spec tiếp theo**: `BE-005-iap-verify-entitlement` — verify-receipt, webhook Apple/Google, mở gate entitlement thật ở download-url.
+- **Việc còn treo của BE-004** (chuyển tiếp, không chặn BE-005): (1) chạy nốt `backfill_media` full 397 (đã verify 3 item thật end-to-end; resumable); (2) tạo bucket R2 + CDN khi lên prod.
+- **BE-005 đã ship trên branch** (contract v0.5.0): `POST /iap/verify-receipt`, `GET /iap/subscription-status` (app-tier), `POST /iap/webhook/apple|google` (signature-only), gate entitlement thật ở `download-url`. Entitlement account-less theo original transaction id; grace = còn quyền; adapter Apple/Google validate qua mock (live-store để staging).
+- **Spec tiếp theo**: `BE-006-security-hardening` — rate limit, WAF, Sentry, load test, OWASP (IDOR ở download-url), + ClamAV (hoãn từ BE-004).
 - **Quyết định kỹ thuật đã chốt** (ảnh hưởng schema DB):
   - Pagination: cursor-based (keyset), không dùng offset `page`/`page_size`.
   - Tag: curated — model `Tag` many-to-many với `Wallpaper`, admin chỉ chọn `tag_ids` có sẵn khi upload, tạo tag mới qua endpoint riêng `/admin/tags`.

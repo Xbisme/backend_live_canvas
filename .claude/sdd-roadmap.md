@@ -4,7 +4,7 @@
 >
 > **Vai trò file này**: pure planning cho track backend. Trạng thái hiện tại → [`project-context.md`](project-context.md). Ship history → [`changelog.md`](changelog.md).
 >
-> Last updated: 2026-07-23 (BE-001→BE-003 đã merge · contract **v0.4.0** — admin auth + download-url thật · **BE-004 đã implement trên branch `BE-004-admin-upload-pipeline`**, chờ review/merge; Contract Sync v0.4.0 → mobile ✅ 2026-07-23)
+> Last updated: 2026-07-26 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP đã implement trên branch** — contract **v0.5.0**, 196 tests xanh, chờ Contract Sync + merge · **spec tiếp theo: BE-006 Security Hardening**)
 > Full requirements: `docs/PRD.md`
 >
 > **Quy ước flavor**: Toàn repo **chỉ có đúng 2 flavor**: `dev` và `prod` (production). KHÔNG có `staging` hay bất kỳ flavor nào khác. Mọi settings/env/CI/deploy đều bám theo đúng 2 flavor này.
@@ -111,18 +111,20 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-004: Admin Upload Pipeline
 
-- **Status**: 🟢 Implemented trên branch `BE-004-admin-upload-pipeline` (spec→clarify→plan→tasks→analyze→implement xong; 127+ tests xanh) — chờ chạy quickstart end-to-end + review/merge
+- **Status**: ✅ Merged (PR #4 + #5) vào `main` — spec→clarify→plan→tasks→analyze→implement xong; 127+ tests xanh
 - **Branch**: `BE-004-admin-upload-pipeline`
 - **Depends on**: BE-003
 - **Đã ship**: contract **v0.4.0** (`/admin/auth/login|refresh`, download-url thật, 422 semantics); admin JWT tier (simplejwt, access 30'/refresh 7d rotate, `AdminTierAPIView`); storage 2 vùng (private staging+masters / public thumbs+previews+covers — MinIO dev, R2 prod); pipeline Celery+Redis (sniff magic-bytes → H.264 normalize → thumbnail → preview 720p watermark, state machine processing→published|failed); admin CRUD wallpapers/tags/collections (curated integrity đủ mã lỗi); app mới `apps/audit` (append-only + sanitize guard); `backfill_media` (idempotent, resumable) + `purge_stale_uploads`; download-url presigned ≤5' cho free (premium 402 tới BE-005). **ClamAV hoãn sang BE-006** (deviation Constitution VII, đã justify trong plan).
-- **Còn lại**: chạy nốt backfill full (3/397 đã verify thật); Contract Sync v0.4.0 → mobile ✅ 2026-07-23.
+- **Món nợ chuyển tiếp**: (1) chạy nốt `backfill_media` full 397 (3/397 đã verify thật; resumable); (2) tạo bucket R2 + CDN khi lên prod; (3) mở gate entitlement premium thật ở `download-url` → thuộc BE-005.
 
 ### BE-005: IAP Verify & Entitlement
 
-- **Status**: ⬜ Not started
+- **Status**: 🟢 Implemented trên branch `BE-005-iap-verify-entitlement` (SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; **34/36 task xong, 196 tests xanh**, ruff/format sạch, không migration drift) — chờ Contract Sync sang mobile + review/merge
 - **Branch**: `BE-005-iap-verify-entitlement`
 - **Depends on**: BE-003
-- **Scope**: `POST /iap/verify-receipt` (App Store Server API / Google Play Developer API); `POST /iap/webhook/apple` + `/google` (verify chữ ký JWS/Pub-Sub); `GET /iap/subscription-status`; hoàn thiện entitlement check thật ở `download-url`; presigned URL premium hết hạn ≤5 phút.
+- **Scope**: `POST /iap/verify-receipt` (App Store Server API / Google Play Developer API); `POST /iap/webhook/apple` + `/google` (verify chữ ký JWS/Pub-Sub OIDC); `GET /iap/subscription-status`; hoàn thiện entitlement check thật ở `download-url`; presigned URL premium hết hạn ≤5 phút.
+- **Đã ship**: contract **v0.5.0** (download-url premium gate thật; IAP endpoints live; 0 error code mới); app `apps/iap` populated (models `SubscriptionEntitlement`/`EntitlementTransaction`/`StoreNotificationEvent`; services verify/is_entitled/resolve_status/apply_notification; store adapters Apple/Google isolate ở `stores/`); 4 endpoint (2 app-tier + 2 webhook signature-only qua `core.api.WebhookAPIView`); gate mở ở `apps/wallpapers` qua public `apps.iap.services.is_entitled`; audit sanitized. **Entitlement key = original transaction id** (ổn định qua renewal); grace/billing-retry = còn quyền; auto-renew off còn trong kỳ → active(auto_renew=false); không ràng device.
+- **Còn lại**: (1) **T002 Contract Sync v0.5.0 → mobile** (repo mobile không có trên máy khi implement — làm tay); (2) đấu nối credential store thật + verify end-to-end (adapter hiện validate qua mock; live-store để staging BE-006/7).
 - **⚠️ Điểm đồng bộ**: báo repo mobile khi merge — họ cần endpoint này hoạt động thật để test MO-005 end-to-end.
 
 ### BE-006: Security Hardening & Production Readiness

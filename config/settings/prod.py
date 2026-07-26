@@ -63,6 +63,21 @@ CDN_BASE_URL = env("CDN_BASE_URL")
 # Async media pipeline broker (BE-004) — required, no default (fail-fast).
 CELERY_BROKER_URL = env("CELERY_BROKER_URL")
 
+# ---------------------------------------------------------------------------
+# IAP store credentials (BE-005) — required in prod, no default (fail-fast).
+# ---------------------------------------------------------------------------
+# Revenue-critical: a missing store credential must stop startup, never silently
+# disable verification (which would 503 every unlock). Store env is Production.
+IAP_APPLE_ISSUER_ID = env("IAP_APPLE_ISSUER_ID")
+IAP_APPLE_KEY_ID = env("IAP_APPLE_KEY_ID")
+IAP_APPLE_PRIVATE_KEY = env.str("IAP_APPLE_PRIVATE_KEY", multiline=True)
+IAP_APPLE_BUNDLE_ID = env("IAP_APPLE_BUNDLE_ID")
+IAP_APPLE_APP_APPLE_ID = env.int("IAP_APPLE_APP_APPLE_ID")
+IAP_APPLE_ENVIRONMENT = env("IAP_APPLE_ENVIRONMENT", default="Production")
+IAP_GOOGLE_PACKAGE_NAME = env("IAP_GOOGLE_PACKAGE_NAME")
+IAP_GOOGLE_SERVICE_ACCOUNT_JSON = env.str("IAP_GOOGLE_SERVICE_ACCOUNT_JSON", multiline=True)
+IAP_GOOGLE_PUBSUB_AUDIENCE = env("IAP_GOOGLE_PUBSUB_AUDIENCE")
+
 STORAGES = {
     "default": {
         "BACKEND": "storages.backends.s3.S3Storage",

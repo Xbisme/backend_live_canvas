@@ -25,6 +25,15 @@ _PROD_ENV = {
     "CDN_BASE_URL": "https://cdn.example.com",
     "AWS_PUBLIC_BUCKET_NAME": "livecanvas-public",
     "CELERY_BROKER_URL": "redis://localhost:6379/0",
+    # Required in prod as of BE-005 (IAP store credentials fail-fast).
+    "IAP_APPLE_ISSUER_ID": "issuer-1",
+    "IAP_APPLE_KEY_ID": "key-1",
+    "IAP_APPLE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----",
+    "IAP_APPLE_BUNDLE_ID": "com.example.livecanvas",
+    "IAP_APPLE_APP_APPLE_ID": "123456789",
+    "IAP_GOOGLE_PACKAGE_NAME": "com.example.livecanvas",
+    "IAP_GOOGLE_SERVICE_ACCOUNT_JSON": "{}",
+    "IAP_GOOGLE_PUBSUB_AUDIENCE": "livecanvas-rtdn",
 }
 
 _DUMP = (

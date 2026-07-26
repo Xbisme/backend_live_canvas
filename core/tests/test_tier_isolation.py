@@ -44,7 +44,14 @@ def test_app_key_never_grants_admin_access(route, settings):
 
 @pytest.mark.parametrize(
     "route",
-    ["/wallpapers", "/categories", "/tags", "/collections", "/wallpapers/1/download-url"],
+    [
+        "/wallpapers",
+        "/categories",
+        "/tags",
+        "/collections",
+        "/wallpapers/1/download-url",
+        "/iap/subscription-status",  # app-tier IAP (BE-005)
+    ],
 )
 def test_admin_token_never_grants_app_access(route, settings, admin_access_token):
     """A valid admin JWT on the app tier → 401 INVALID_APP_KEY (no fallback)."""
@@ -54,6 +61,35 @@ def test_admin_token_never_grants_app_access(route, settings, admin_access_token
     res = client.get(route)
     assert res.status_code == 401, route
     assert res.json()["error"]["code"] == "INVALID_APP_KEY", route
+
+
+def test_verify_receipt_is_app_tier_only(settings, admin_access_token):
+    """POST /iap/verify-receipt rejects both no-credential and admin-JWT callers (app tier)."""
+    settings.X_APP_KEY = APP_KEY
+    bare = APIClient()
+    assert bare.post("/iap/verify-receipt", {}, format="json").status_code == 401
+    admin = APIClient()
+    admin.credentials(HTTP_AUTHORIZATION=f"Bearer {admin_access_token}")
+    assert admin.post("/iap/verify-receipt", {}, format="json").status_code == 401
+
+
+@pytest.mark.parametrize("route", ["/iap/webhook/apple", "/iap/webhook/google"])
+def test_webhooks_are_signature_only(route, settings, admin_access_token):
+    """Webhooks carry no app/admin credential — the signature decides. With no valid
+    signature the request is rejected (400) regardless of X-App-Key or an admin JWT, never
+    a tier 401 (Constitution II)."""
+    settings.X_APP_KEY = APP_KEY
+    for client in (APIClient(),):  # anonymous
+        res = client.post(route, {"signedPayload": "nope", "message": {}}, format="json")
+        assert res.status_code == 400, route
+        assert res.json()["error"]["code"] == "WEBHOOK_SIGNATURE_INVALID", route
+    # An admin JWT does not turn a webhook into an authenticated tier either.
+    admin = APIClient()
+    admin.credentials(HTTP_AUTHORIZATION=f"Bearer {admin_access_token}")
+    assert (
+        admin.post(route, {"signedPayload": "nope", "message": {}}, format="json").status_code
+        == 400
+    )
 
 
 def test_no_credentials_denied_on_both_tiers(settings):

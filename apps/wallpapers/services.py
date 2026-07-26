@@ -150,17 +150,22 @@ def batch_wallpapers(ids: list) -> QuerySet:
     )
 
 
-def build_download_url(wallpaper: Wallpaper) -> dict:
-    """The download edge — real presigned link as of v0.4.0 (spec FR-018, Constitution III).
+def build_download_url(wallpaper: Wallpaper, transaction_id: str | None = None) -> dict:
+    """The download edge — the one authoritative entitlement gate (Constitution III, FR-018).
 
-    Premium → ``ENTITLEMENT_REQUIRED`` unconditionally (verification arrives in BE-005 —
-    safe by default, no interim bypass). Free → a short-lived (≤ 5 min) single-object
-    presigned GET on the private master. A published wallpaper without a self-hosted
-    master yet (seeded, pre-backfill) has no downloadable bytes → 404. The presigned URL
-    must never be logged (Constitution XI).
+    Premium → requires ``transaction_id`` to resolve to a currently-entitled subscription
+    (``active``/``in_grace_period``, not past expiry); otherwise ``ENTITLEMENT_REQUIRED``.
+    Free → the ``transaction_id`` is ignored. Either way, a short-lived (≤ 5 min) single-object
+    presigned GET on the private master. A published wallpaper without a self-hosted master yet
+    (seeded, pre-backfill) has no downloadable bytes → 404 (evaluated before the gate — this
+    function is only reached after ``get_published_or_404``). The presigned URL must never be
+    logged (Constitution XI).
     """
     if wallpaper.is_premium:
-        raise EntitlementRequired()
+        from apps.iap import services as iap  # public iap service surface (Constitution V)
+
+        if not iap.is_entitled(transaction_id):
+            raise EntitlementRequired()
     if not wallpaper.master_key:
         raise Http404
 
