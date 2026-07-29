@@ -15,12 +15,26 @@ from apps.wallpapers.serializers import (
     CategorySerializer,
     CollectionDetailSerializer,
     CollectionMetaSerializer,
+    HomeSectionSerializer,
     TagSerializer,
     VirtualTagSerializer,
     WallpaperDetailSerializer,
     WallpaperListSerializer,
 )
 from core.api import AppTierAPIView
+
+
+class HomeView(AppTierAPIView):
+    """GET /home — the whole curated Browse screen in one call, unpaginated (contract v0.7.0).
+
+    Bounded by construction (≤10 sections × ≤10 wallpapers), so it joins the other curated
+    surfaces that return whole rather than paginating. Carries no entitlement input: premium
+    sections show a badge, the gate stays at ``download-url`` (Constitution III).
+    """
+
+    def get(self, request: Request) -> Response:
+        sections = services.build_home_sections()
+        return Response({"sections": HomeSectionSerializer(sections, many=True).data})
 
 
 class CategoryListView(AppTierAPIView):

@@ -4,9 +4,11 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (đồng bộ tay giống `api-context.md`).
 >
-> Last updated: 2026-07-27 · Contract version tương ứng: `v0.6.0`
+> Last updated: 2026-07-29 · Contract version tương ứng: `v0.7.0`
 >
-> **v0.6.0 (mobile-driven)**: màn #7 Wallpaper Detail cần thêm **`description`** (mô tả ngắn của wallpaper) cho mục "Mô tả" + mục **"Hình nền liên quan"** (suy theo tag đầu tiên, không endpoint riêng). `description` là field MỚI trên `Wallpaper` — **backend chưa implement**, đã báo qua backend roadmap.
+> **v0.7.0 (BE-008)**: màn #1 **Browse** đổi từ lưới cursor phẳng sang **section curated có tiêu đề** — admin bật collection lên home + đặt thứ tự, app lấy cả màn bằng 1 lần gọi `GET /home` (tối đa 10 section × 10 wallpaper, không phân trang). `Wallpaper.description` (khai từ v0.6.0) **nay backend implement thật**, và admin sửa được mô tả của wallpaper đã tồn tại qua `PATCH /admin/wallpapers/{id}`.
+>
+> **v0.6.0 (mobile-driven)**: màn #7 Wallpaper Detail cần thêm **`description`** (mô tả ngắn của wallpaper) cho mục "Mô tả" + mục **"Hình nền liên quan"** (suy theo tag đầu tiên, không endpoint riêng). `description` là field MỚI trên `Wallpaper` — backend implement ở BE-008 (v0.7.0).
 
 ---
 
@@ -14,7 +16,7 @@
 
 | # | Màn hình | Data cần | Action | Endpoint liên quan |
 |---|---|---|---|---|
-| 1 | **Browse** (trang chủ, grid theo category) | Thumbnail, title, category, tags, is_premium, orientation — cuộn vô hạn | Scroll load thêm (cursor), tap → Detail, đổi category | `GET /wallpapers` |
+| 1 | **Browse** (trang chủ) | **Các section curated có tiêu đề (v0.7.0)**: mỗi section = 1 collection admin bật lên home, có title/cover/accent_color/is_premium + ≤10 wallpaper theo đúng thứ tự curate; tối đa 10 section, sắp theo thứ tự admin đặt. Khi lọc theo tag thì quay về lưới phẳng cuộn vô hạn (thumbnail, title, category, tags, is_premium, orientation) | Tap wallpaper → Detail, "Xem tất cả" 1 section → Collection Detail, chọn tag → lưới phẳng (scroll load thêm bằng cursor) | `GET /home` (section), `GET /wallpapers` (lưới phẳng khi lọc tag) |
 | 2 | **Category Detail** (list theo 1 category) | Giống Browse, filter cố định 1 category | Scroll load thêm, filter phụ orientation/tag | `GET /wallpapers?category=...` |
 | 3 | **Search** | Giống Browse, filter theo từ khóa + tag chọn thêm | Scroll load thêm, chọn tag gợi ý | `GET /wallpapers?search=...&tags=...`, `GET /tags` |
 | 4 | **Tag Filter Chips** (dùng ở Browse/Search) | Danh sách tag có sẵn (curated), **có chip "All" (Tất cả) đứng đầu, chọn mặc định** | Chọn "All" = bỏ mọi filter tag (lấy toàn bộ, mới→cũ); chọn/bỏ chọn tag khác | `GET /tags` |
@@ -24,9 +26,9 @@
 | 8 | **Favorites** | List wallpaper đã lưu local (theo ID) — cần fetch lại data mới nhất mỗi lần mở | Bỏ favorite, tap → Detail | `POST /wallpapers/batch` |
 | 9 | **Paywall/Premium** | Danh sách gói (giá lấy từ Store, KHÔNG từ backend) + trạng thái subscription hiện tại (nếu đã có `transaction_id` lưu local) | Mua, Restore purchase, gửi receipt verify, kiểm tra lại trạng thái khi mở màn | `POST /iap/verify-receipt`, `GET /iap/subscription-status` |
 | 10 | **Set Wallpaper Confirm** (Android) / **Hướng dẫn Shortcuts** (iOS) | Không cần thêm API — dùng `download_url` đã có từ Detail | Native action | — |
-| 11 | **Admin: Upload Wallpaper** | Danh sách category + tag có sẵn để chọn | Chọn file, chọn category, chọn tag (curated — không gõ tự do), submit | `GET /admin/tags` hoặc `GET /tags`, `POST /admin/uploads/presign`, `POST /admin/wallpapers` |
+| 11 | **Admin: Upload Wallpaper** | Danh sách category + tag có sẵn để chọn | Chọn file, chọn category, chọn tag (curated — không gõ tự do), **nhập mô tả (optional, v0.7.0)**, submit; **sửa/xoá mô tả của wallpaper đã tồn tại (v0.7.0)** | `GET /admin/tags` hoặc `GET /tags`, `POST /admin/uploads/presign`, `POST /admin/wallpapers`, `PATCH /admin/wallpapers/{id}` |
 | 12 | **Admin: Quản lý Tag** | Danh sách tag + số wallpaper đang dùng mỗi tag | Tạo tag mới, xóa tag không dùng | `GET /admin/tags`, `POST /admin/tags`, `DELETE /admin/tags/{id}` |
-| 13 | **Admin: Quản lý Bộ sưu tập** | Danh sách collection + wallpaper thuộc mỗi bộ (curated) | Tạo/sửa collection (title, cover, author, description, is_premium), thêm/bớt/sắp xếp wallpaper, xóa | `GET/POST/PATCH/DELETE /admin/collections`, `POST /admin/uploads/presign` (cover) |
+| 13 | **Admin: Quản lý Bộ sưu tập** | Danh sách collection + wallpaper thuộc mỗi bộ (curated) | Tạo/sửa collection (title, cover, author, description, is_premium), thêm/bớt/sắp xếp wallpaper, xóa, **bật/tắt hiện trên Browse + đặt thứ tự section (v0.7.0)** | `GET/POST/PATCH/DELETE /admin/collections`, `POST /admin/uploads/presign` (cover) |
 | 14 | **Admin: Đăng nhập** (admin tooling — không phải màn hình app end-user) | Form username/password của staff account; phiên làm việc cần token ngắn hạn tự gia hạn | Đăng nhập → nhận access (30') + refresh (7 ngày, rotate); mọi màn admin #11–13 gắn `Authorization: Bearer <access>`; hết hạn → refresh tự động, refresh hết hạn → đăng nhập lại | `POST /admin/auth/login`, `POST /admin/auth/refresh` |
 
 ## Quyết định đã chốt (ảnh hưởng trực tiếp tới response schema)
@@ -42,6 +44,14 @@
   - **"Tải tất cả"**: không có endpoint riêng — client lặp gọi `GET /wallpapers/{id}/download-url` cho từng item. **Entitlement vẫn quyết duy nhất ở `download-url`** (kể cả bộ premium): cover/detail chỉ hiển thị nút "Mở khoá" theo `collection.is_premium`, gate thật vẫn ở download-url từng file.
   - `Wallpaper` thêm field `collections: CollectionRef[]` (mini: id/slug/title/cover_url/is_premium) để Detail nhảy vào bộ. Chỉ đảm bảo populate ở `GET /wallpapers/{id}`; ở list lớn có thể rỗng để tiết kiệm payload (client Detail luôn có dữ liệu cần).
 
+- **Browse sections (v0.7.0)**: màn #1 render các **section curated có tiêu đề**. Section **KHÔNG phải resource mới** — nó là `Collection` đã có, được admin bật `show_on_home` + đặt `home_position`; mọi thứ section cần (title, cover_url, accent_color, is_premium, danh sách wallpaper có thứ tự) collection đã mang sẵn.
+  - `GET /home` trả **cả màn trong 1 lần gọi**, KHÔNG phân trang, bounded cứng **≤10 section × ≤10 wallpaper/section** — trần áp **lúc đọc**: admin bật dư thì phần dư bị bỏ qua im lặng (không lỗi, không chặn thao tác admin).
+  - Section sắp theo `home_position` tăng dần; trùng vị trí thì thứ tự vẫn **ổn định giữa các request** (tie-break theo id).
+  - Chỉ chứa wallpaper published; section không còn wallpaper nào hiển thị được thì **bị bỏ hẳn và KHÔNG chiếm slot** (section kế tiếp lấp vào). Chưa bật collection nào → `sections: []` + 200, không phải 404.
+  - "Xem tất cả" của 1 section = dùng `collection_id` gọi `GET /collections/{id}` đã có — không có phân trang bên trong section.
+  - Section premium **chỉ hiển thị badge**; entitlement vẫn quyết duy nhất ở `download-url` (không đổi).
+  - `show_on_home`/`home_position` là **input của admin**, KHÔNG xuất hiện trong payload công khai `GET /collections`.
+- **Mô tả wallpaper (v0.7.0)**: `Wallpaper.description` nay có thật (nullable). Đặt lúc đăng ký qua `POST /admin/wallpapers`, sửa/xoá sau qua `PATCH /admin/wallpapers/{id}` (**chỉ sửa được mô tả**, không đụng media/status/tag/category/collection). Chuỗi rỗng hoặc toàn khoảng trắng → lưu `null`, để client ẩn mục "Mô tả" chỉ bằng phép kiểm tra null.
 - **Admin auth (v0.4.0)**: các màn admin #11–13 xác thực bằng **Bearer JWT** (access 30 phút / refresh 7 ngày rotate) đổi từ credential staff qua `POST /admin/auth/login` — tách tuyệt đối khỏi `X-App-Key` của app end-user. Backend không thêm hệ thống user mới: tài khoản admin là Django staff user sẵn có.
 - **Download thật (v0.4.0)**: `GET /wallpapers/{id}/download-url` từ v0.4.0 trả **presigned URL thật** (hết hạn ≤5 phút) cho wallpaper free thay vì mock. Lưu ý client: domain của `download_url` (S3/R2 endpoint) **khác** domain thumbnail/preview (CDN) — không hardcode/so sánh domain.
 - **Entitlement thật (v0.5.0)**: gate premium ở `download-url` đã hết vô điều kiện — client gửi `transaction_id` (query) và backend tra entitlement thật.

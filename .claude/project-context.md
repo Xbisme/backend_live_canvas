@@ -5,10 +5,10 @@
 >
 > Last updated: 2026-07-27 (BE-001→**BE-004 merged** vào `main` — PR #4+#5 · **BE-005 IAP implemented** trên branch, 196 tests xanh · **Contract Sync v0.5.0 → mobile ĐÃ XONG** (2026-07-26) · contract hiện tại **v0.6.0** · spec tiếp theo: **BE-006 Security**)
 >
-> 🆕 **2 ask mobile (2026-07-27) → gộp thành `BE-008 Mobile-Driven Content`, là spec KẾ TIẾP (trước BE-006 Security)**:
-> (1) `Wallpaper.description` (nullable) cho mục "Mô tả" màn Detail — contract **v0.6.0 đã sync 2 repo**, backend chưa implement nên trả `null`;
-> (2) Browse dạng **section curated có tiêu đề** — chốt **tái dùng `Collection`** (thêm `show_on_home` + `home_position`, KHÔNG model mới) + endpoint `GET /home` bounded ≤10 item/section → sẽ bump **v0.7.0**.
-> Chi tiết scope + điểm cần chốt khi plan: `sdd-roadmap.md` §BE-008. **Số spec là ID, không phải thứ tự thi công** — BE-006/BE-007 giữ nguyên số, chạy sau.
+> ✅ **BE-008 (2 ask mobile) đã IMPLEMENT XONG trên branch `BE-008-mobile-driven-content` (2026-07-29)** — contract **v0.7.0**, 237 tests xanh, đã sync mobile:
+> (1) `Wallpaper.description` **có giá trị thật** + `PATCH /admin/wallpapers/{id}` để điền mô tả cho 397 item catalog cũ;
+> (2) `GET /home` — Browse dạng **section curated**, tái dùng `Collection` (`show_on_home`/`home_position`), KHÔNG model mới, ≤10 section × ≤10 wallpaper, **4 query cố định**, p95 37 ms.
+> Chi tiết: `sdd-roadmap.md` §BE-008. **Số spec là ID, không phải thứ tự thi công** — BE-006/BE-007 giữ số cũ, chạy sau.
 > **Mục đích**: Snapshot tối thiểu để bắt đầu 1 session làm việc trên repo backend.
 >
 > **Đọc file nào khi nào**:
@@ -39,8 +39,8 @@
   - ✅ **Contract v0.6.0 (mobile-driven, 2026-07-27)**: mobile bump + copy ngược sang repo này (3 file đã khớp verbatim). `Wallpaper.description` mới là **khai báo trước** — backend trả `null` cho tới khi ship BE-008; client ẩn mục "Mô tả" khi null.
 - **Việc còn treo của BE-004** (chuyển tiếp, không chặn BE-005): (1) chạy nốt `backfill_media` full 397 (đã verify 3 item thật end-to-end; resumable); (2) tạo bucket R2 + CDN khi lên prod.
 - **BE-005 đã ship trên branch** (contract v0.5.0): `POST /iap/verify-receipt`, `GET /iap/subscription-status` (app-tier), `POST /iap/webhook/apple|google` (signature-only), gate entitlement thật ở `download-url`. Entitlement account-less theo original transaction id; grace = còn quyền; adapter Apple/Google validate qua mock (live-store để staging).
-- **Spec tiếp theo**: `BE-008-mobile-driven-content` — `Wallpaper.description` + Browse sections (`GET /home` tái dùng `Collection` qua `show_on_home`/`home_position`), bump contract v0.7.0 + sync mobile (lần này mobile **bắt buộc regenerate client** vì đổi schema/path).
-- **Sau đó**: `BE-006-security-hardening` — rate limit, WAF, Sentry, load test, OWASP (IDOR ở download-url), + ClamAV (hoãn từ BE-004); rồi `BE-007-deploy-launch`.
+- **BE-008 đã ship trên branch** (contract v0.7.0): `GET /home` (app tier, bounded ≤10×10, trần áp lúc đọc, section rỗng không chiếm slot); `Collection.show_on_home`/`home_position` + index; `Wallpaper.description` thật (rỗng/whitespace → `null`); `PATCH /admin/wallpapers/{id}` chỉ sửa mô tả. **Đã sync mobile v0.7.0** — mobile **bắt buộc regenerate client** lần này vì đổi path + schema.
+- **Spec tiếp theo**: `BE-006-security-hardening` — rate limit, WAF, Sentry, load test, OWASP (IDOR ở download-url), + ClamAV (hoãn từ BE-004); rồi `BE-007-deploy-launch`.
 - **Quyết định kỹ thuật đã chốt** (ảnh hưởng schema DB):
   - Pagination: cursor-based (keyset), không dùng offset `page`/`page_size`.
   - Tag: curated — model `Tag` many-to-many với `Wallpaper`, admin chỉ chọn `tag_ids` có sẵn khi upload, tạo tag mới qua endpoint riêng `/admin/tags`.

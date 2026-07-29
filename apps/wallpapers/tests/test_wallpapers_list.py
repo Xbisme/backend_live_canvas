@@ -98,3 +98,13 @@ def test_hidden_content_never_leaks(api):
     WallpaperFactory(deleted_at=timezone.now())
     published = WallpaperFactory()
     assert _ids(api.get("/wallpapers").json()) == [published.id]
+
+
+def test_list_carries_description(api):
+    """Same wallpaper shape everywhere — description is not detail-only (spec FR-016)."""
+    described = WallpaperFactory(description="mô tả ngắn")
+    plain = WallpaperFactory()
+
+    rows = {w["id"]: w for w in api.get("/wallpapers").json()["items"]}
+    assert rows[described.id]["description"] == "mô tả ngắn"
+    assert rows[plain.id]["description"] is None

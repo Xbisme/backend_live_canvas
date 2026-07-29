@@ -37,6 +37,9 @@ class WallpaperFactory(factory.django.DjangoModelFactory):
         skip_postgeneration_save = True
 
     title = factory.Sequence(lambda n: f"Wallpaper {n}")
+    # Default mirrors the real catalogue: every wallpaper predating v0.7.0 has no description.
+    # Pass ``description=...`` explicitly in tests that need one.
+    description = None
     category = factory.SubFactory(CategoryFactory)
     orientation = "portrait"
     thumbnail_url = "https://cdn.example.com/thumbs/w.jpg"
@@ -67,6 +70,10 @@ class CollectionFactory(factory.django.DjangoModelFactory):
     cover_url = "https://cdn.example.com/collections/c.jpg"
     accent_color = "#FF6F9C"
     is_premium = False
+    # Off by default, like every collection created before v0.7.0. Home-screen tests opt in
+    # with ``show_on_home=True, home_position=<n>``.
+    show_on_home = False
+    home_position = 0
 
 
 class CollectionItemFactory(factory.django.DjangoModelFactory):

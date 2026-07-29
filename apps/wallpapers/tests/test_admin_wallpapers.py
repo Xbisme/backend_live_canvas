@@ -162,3 +162,143 @@ def test_register_responds_fast_without_touching_bytes(admin_client, video_slot,
     elapsed = time.monotonic() - start
     assert res.status_code == 201
     assert elapsed < 2.0
+
+
+# --- Description (US3, contract v0.7.0) --------------------------------------
+
+
+def test_register_with_description(admin_client, video_slot, head_ok):
+    cat, tag = CategoryFactory(), TagFactory()
+    body = _body(video_slot, cat, [tag], description="Neon phản chiếu sau mưa.")
+    res = admin_client.post("/admin/wallpapers", body, format="json")
+
+    assert res.status_code == 201
+    assert res.json()["description"] == "Neon phản chiếu sau mưa."
+    assert Wallpaper.objects.get(pk=res.json()["id"]).description == "Neon phản chiếu sau mưa."
+
+
+def test_register_without_description_stores_null(admin_client, video_slot, head_ok):
+    cat, tag = CategoryFactory(), TagFactory()
+    res = admin_client.post("/admin/wallpapers", _body(video_slot, cat, [tag]), format="json")
+
+    assert res.status_code == 201
+    assert res.json()["description"] is None
+    assert Wallpaper.objects.get(pk=res.json()["id"]).description is None
+
+
+def test_register_blank_description_normalized_to_null(admin_client, video_slot, head_ok):
+    cat, tag = CategoryFactory(), TagFactory()
+    body = _body(video_slot, cat, [tag], description="   \n  ")
+    res = admin_client.post("/admin/wallpapers", body, format="json")
+
+    assert res.status_code == 201
+    assert Wallpaper.objects.get(pk=res.json()["id"]).description is None
+
+
+def test_patch_sets_description_on_a_pre_existing_wallpaper(admin_client, api):
+    """The catalogue predates the field — this path is the only way it ever gets one (SC-010)."""
+    wallpaper = WallpaperFactory()  # created without ever passing through the register path
+    assert wallpaper.description is None
+
+    res = admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}", {"description": "Mô tả bổ sung sau."}, format="json"
+    )
+    assert res.status_code == 200
+    assert res.json()["description"] == "Mô tả bổ sung sau."
+    assert api.get(f"/wallpapers/{wallpaper.pk}").json()["description"] == "Mô tả bổ sung sau."
+
+
+def test_patch_changes_and_clears_description(admin_client):
+    wallpaper = WallpaperFactory(description="cũ")
+
+    admin_client.patch(f"/admin/wallpapers/{wallpaper.pk}", {"description": "mới"}, format="json")
+    wallpaper.refresh_from_db()
+    assert wallpaper.description == "mới"
+
+    res = admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}", {"description": None}, format="json"
+    )
+    assert res.status_code == 200
+    wallpaper.refresh_from_db()
+    assert wallpaper.description is None
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\n\t "])
+def test_patch_whitespace_description_becomes_null(admin_client, blank):
+    wallpaper = WallpaperFactory(description="cũ")
+
+    res = admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}", {"description": blank}, format="json"
+    )
+    assert res.status_code == 200
+    wallpaper.refresh_from_db()
+    assert wallpaper.description is None
+
+
+def test_patch_cannot_touch_any_other_field(admin_client):
+    """A one-field serializer makes this structural, not a review promise (spec FR-015)."""
+    category = CategoryFactory()
+    wallpaper = WallpaperFactory(title="Original", is_premium=False, category=category)
+    other = CategoryFactory()
+
+    res = admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}",
+        {
+            "description": "chỉ mô tả đổi",
+            "title": "Hijacked",
+            "is_premium": True,
+            "category_id": other.pk,
+            "status": WallpaperStatus.FAILED,
+        },
+        format="json",
+    )
+    assert res.status_code == 200
+    wallpaper.refresh_from_db()
+    assert wallpaper.description == "chỉ mô tả đổi"
+    assert wallpaper.title == "Original"
+    assert wallpaper.is_premium is False
+    assert wallpaper.category_id == category.pk
+    assert wallpaper.status == WallpaperStatus.PUBLISHED
+
+
+def test_patch_description_is_audited_without_the_text(admin_client, admin_user):
+    from apps.audit.models import AuditLogEntry
+
+    wallpaper = WallpaperFactory()
+    secret_ish = "nội dung mô tả không nên nằm trong audit"
+    admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}", {"description": secret_ish}, format="json"
+    )
+
+    entry = AuditLogEntry.objects.filter(action="wallpaper.update").latest("id")
+    assert entry.actor == admin_user
+    assert entry.object_id == str(wallpaper.pk)
+    assert entry.metadata == {"field": "description"}
+    assert secret_ish not in str(entry.metadata)
+
+
+def test_patch_missing_wallpaper_is_404(admin_client):
+    assert (
+        admin_client.patch(
+            "/admin/wallpapers/999999", {"description": "x"}, format="json"
+        ).status_code
+        == 404
+    )
+
+
+def test_patch_soft_deleted_wallpaper_is_404(admin_client):
+    from django.utils import timezone
+
+    wallpaper = WallpaperFactory(deleted_at=timezone.now())
+    res = admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}", {"description": "x"}, format="json"
+    )
+    assert res.status_code == 404
+
+
+def test_patch_requires_admin_tier(api):
+    """App key must not reach an admin endpoint (Constitution II)."""
+    wallpaper = WallpaperFactory()
+    res = api.patch(f"/admin/wallpapers/{wallpaper.pk}", {"description": "x"}, format="json")
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "UNAUTHORIZED_ADMIN"

@@ -42,3 +42,31 @@ def test_detail_404_for_hidden(api, kwargs):
 def test_detail_requires_app_key(anon):
     wp = WallpaperFactory()
     assert anon.get(f"/wallpapers/{wp.id}").status_code == 401
+
+
+# --- Description (US3, contract v0.7.0) --------------------------------------
+
+
+def test_detail_returns_description(api):
+    wp = WallpaperFactory(description="Đèn neon phản chiếu trên mặt đường sau mưa.")
+    assert api.get(f"/wallpapers/{wp.id}").json()["description"] == (
+        "Đèn neon phản chiếu trên mặt đường sau mưa."
+    )
+
+
+def test_detail_description_is_null_not_empty_string(api):
+    """The client hides the block on a null check alone — `""` would render an empty block."""
+    wp = WallpaperFactory()
+    body = api.get(f"/wallpapers/{wp.id}").json()
+    assert "description" in body
+    assert body["description"] is None
+
+
+def test_batch_returns_description(api):
+    described = WallpaperFactory(description="có mô tả")
+    plain = WallpaperFactory()
+
+    rows = api.post("/wallpapers/batch", {"ids": [described.id, plain.id]}, format="json").json()
+    by_id = {row["id"]: row["description"] for row in rows}
+    assert by_id[described.id] == "có mô tả"
+    assert by_id[plain.id] is None

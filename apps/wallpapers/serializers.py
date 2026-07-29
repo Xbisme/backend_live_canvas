@@ -84,6 +84,7 @@ class WallpaperSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "description",
             "category",
             "tags",
             "orientation",
@@ -117,6 +118,27 @@ class WallpaperDetailSerializer(WallpaperSerializer):
 
     def get_collections(self, obj) -> list:
         return CollectionRefSerializer(obj.collections.all(), many=True).data
+
+
+class HomeSectionSerializer(serializers.Serializer):
+    """One curated row of the Browse screen (contract v0.7.0).
+
+    Reads from ``{"collection": Collection, "items": [Wallpaper]}`` as produced by
+    ``services.build_home_sections``. ``key`` is the collection slug, not its id: the client
+    uses it for analytics and scroll-state, and it survives a title rename (research D5).
+    """
+
+    key = serializers.CharField(source="collection.slug")
+    title = serializers.CharField(source="collection.title")
+    collection_id = serializers.IntegerField(source="collection.id")
+    cover_url = serializers.CharField(source="collection.cover_url", allow_blank=True)
+    accent_color = serializers.CharField(source="collection.accent_color", allow_null=True)
+    is_premium = serializers.BooleanField(source="collection.is_premium")
+    items = serializers.SerializerMethodField()
+
+    def get_items(self, obj) -> list:
+        # Same wallpaper shape as every other list surface — one client model (spec FR-005).
+        return WallpaperListSerializer(obj["items"], many=True).data
 
 
 class CollectionDetailSerializer(CollectionMetaSerializer):

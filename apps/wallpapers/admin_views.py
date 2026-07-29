@@ -17,6 +17,7 @@ from apps.wallpapers.admin_serializers import (
     AdminTagCreateSerializer,
     AdminWallpaperCreateSerializer,
     AdminWallpaperSerializer,
+    AdminWallpaperUpdateSerializer,
 )
 from apps.wallpapers.models import Wallpaper, WallpaperStatus
 from apps.wallpapers.pagination import WallpaperCursorPagination
@@ -42,6 +43,7 @@ class AdminWallpaperListCreateView(AdminTierAPIView):
             )
             wallpaper = Wallpaper.objects.create(
                 title=data["title"],
+                description=data["description"],
                 category_id=data["category_id"],
                 orientation=data["orientation"],
                 is_premium=data["is_premium"],
@@ -73,7 +75,18 @@ class AdminWallpaperListCreateView(AdminTierAPIView):
 
 
 class AdminWallpaperDetailView(AdminTierAPIView):
-    """DELETE /admin/wallpapers/{id} — soft delete (Constitution IX)."""
+    """PATCH /admin/wallpapers/{id} — description only (v0.7.0) · DELETE — soft delete."""
+
+    def patch(self, request: Request, pk: int) -> Response:
+        payload = AdminWallpaperUpdateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        with transaction.atomic():  # mutation + audit are one transaction (research D8)
+            wallpaper = admin_services.update_wallpaper_description(
+                pk, payload.validated_data["description"]
+            )
+            # The text itself is content, not an auditable value — record that it changed.
+            audit.record(request.user, "wallpaper.update", wallpaper, field="description")
+        return Response(AdminWallpaperSerializer(wallpaper).data)
 
     def delete(self, request: Request, pk: int) -> Response:
         wallpaper = admin_services.soft_delete_wallpaper(pk)

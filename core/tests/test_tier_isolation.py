@@ -45,6 +45,7 @@ def test_app_key_never_grants_admin_access(route, settings):
 @pytest.mark.parametrize(
     "route",
     [
+        "/home",  # curated Browse screen (BE-008)
         "/wallpapers",
         "/categories",
         "/tags",

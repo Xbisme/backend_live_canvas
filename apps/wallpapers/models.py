@@ -77,6 +77,10 @@ class Wallpaper(models.Model):
     """Central content unit (a live-wallpaper video)."""
 
     title = models.CharField(max_length=200)
+    # Contract-nullable (v0.6.0 declared it, v0.7.0 fills it): NULL means "no description" so the
+    # client hides the block on a null check alone. Blank/whitespace input is normalized to NULL
+    # at the serializer boundary — "" must never reach this column (spec FR-017).
+    description = models.TextField(null=True, blank=True)  # noqa: DJ001 — contract-nullable
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="wallpapers")
     tags = models.ManyToManyField(Tag, blank=True, related_name="wallpapers")
     orientation = models.CharField(max_length=10, choices=Orientation.choices)
@@ -147,8 +151,18 @@ class Collection(models.Model):
     is_premium = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Home-screen curation (v0.7.0). A "section" on Browse IS this collection — no separate
+    # model. ``home_position`` is deliberately NOT unique: ties are legal and broken by ``id``
+    # so the operator can reorder without swap dances (research D3).
+    show_on_home = models.BooleanField(default=False)
+    home_position = models.PositiveIntegerField(default=0)
+
     class Meta:
         ordering = ["-created_at", "-id"]
+        indexes = [
+            # Covers the filter + sort of the only query that reads these columns.
+            models.Index(fields=["show_on_home", "home_position", "id"], name="coll_home_idx"),
+        ]
 
     def __str__(self) -> str:
         return self.title

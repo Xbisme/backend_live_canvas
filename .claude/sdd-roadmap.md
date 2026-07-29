@@ -4,12 +4,12 @@
 >
 > **Vai trò file này**: pure planning cho track backend. Trạng thái hiện tại → [`project-context.md`](project-context.md). Ship history → [`changelog.md`](changelog.md).
 >
-> Last updated: 2026-07-27 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP đã implement trên branch** — 196 tests xanh, **Contract Sync v0.5.0 → mobile ĐÃ XONG**, chờ merge · contract hiện tại **v0.6.0** · **spec tiếp theo: BE-008 Mobile-Driven Content**, rồi mới BE-006 Security)
+> Last updated: 2026-07-29 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP implement xong trên branch**, Contract Sync v0.5.0 đã xong, chờ merge · **BE-008 IMPLEMENT XONG trên branch `BE-008-mobile-driven-content`** — contract **v0.7.0**, 237 tests xanh, đã sync mobile · **spec tiếp theo: BE-006 Security Hardening**)
 >
-> 🆕 **2 ask từ mobile (2026-07-27) — đã gộp thành BE-008, chạy NGAY SAU BE-005**:
-> (1) `Wallpaper.description` (nullable) cho mục "Mô tả" màn Detail — contract đã khai trước ở **v0.6.0** cả 2 repo, backend trả `null` tới khi ship.
-> (2) Browse dạng **section curated có tiêu đề** — chốt **tái dùng `Collection`** (`show_on_home` + `home_position`) + endpoint `GET /home`, sẽ bump **v0.7.0**.
-> BE-006 Security lùi xuống sau BE-008 (**số spec là ID, không phải thứ tự thi công**).
+> ✅ **BE-008 đã ship trên branch (2026-07-29)** — 2 ask từ mobile gộp làm một, chạy trước BE-006 đúng như kế hoạch:
+> (1) `Wallpaper.description` **nay có giá trị thật** (v0.6.0 mới chỉ khai báo) + `PATCH /admin/wallpapers/{id}` để điền mô tả cho catalog cũ.
+> (2) Browse dạng **section curated**: `GET /home` tái dùng `Collection` (`show_on_home` + `home_position`), **không model mới**.
+> BE-006 Security vẫn giữ số cũ và chạy sau (**số spec là ID, không phải thứ tự thi công**).
 > Full requirements: `docs/PRD.md`
 >
 > **Quy ước flavor**: Toàn repo **chỉ có đúng 2 flavor**: `dev` và `prod` (production). KHÔNG có `staging` hay bất kỳ flavor nào khác. Mọi settings/env/CI/deploy đều bám theo đúng 2 flavor này.
@@ -158,9 +158,14 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 - **Scope**: Deploy flavor `prod` lên hạ tầng production (build từ `config.settings.prod` + `.env.prod`), backup định kỳ, runbook vận hành. Không có bước staging riêng — verify trên flavor `dev` rồi promote thẳng lên `prod`.
 - **⚠️ Điểm đồng bộ**: báo repo mobile khi production sẵn sàng — họ cần trước khi submit store (MO-006).
 
-### BE-008: Mobile-Driven Content — Browse Sections + Wallpaper Description 🔜 KẾ TIẾP
+### BE-008: Mobile-Driven Content — Browse Sections + Wallpaper Description ✅
 
-- **Status**: ⬜ Not started — **chạy ngay sau khi merge BE-005, TRƯỚC BE-006** (quyết định project lead 2026-07-27: mobile đang thiếu data để bám prototype, không đợi hết hardening).
+- **Status**: 🟢 **Implemented trên branch `BE-008-mobile-driven-content` (2026-07-29)** — SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; **35/35 task, 237 tests xanh** (+41 so với BE-005), ruff sạch, không migration drift, Contract Sync v0.7.0 → mobile đã xong. Chờ review/merge.
+- **Đã ship**: `GET /home` (app tier, không phân trang, ≤10 section × ≤10 wallpaper, trần áp lúc đọc); `Collection.show_on_home`/`home_position` + index `coll_home_idx`; `Wallpaper.description` thật + `PATCH /admin/wallpapers/{id}` (serializer **1 field** nên không sửa được thứ khác); Django-admin sửa cờ home ngay trên changelist.
+- **Số đo thật**: `/home` chạy **4 query cố định** bất kể 1 hay 100 wallpaper (test `django_assert_num_queries`), **p95 = 37 ms** trên màn đầy — thừa ngưỡng SC-005 (<300 ms), không cần cache.
+- **Bẫy đã xử lý khi implement**: (1) `Collection.Meta.ordering = -created_at` sẽ âm thầm đảo ngược stack nếu quên `order_by("home_position","id")` — có test chặn; (2) nested `CategorySerializer`/`TagSerializer` fallback `COUNT(*)` mỗi object → N+1 trên chính màn đầu tiên app gọi; sửa bằng `Prefetch` **kèm annotation** thay vì `select_related` thuần.
+- **Lưu ý contract còn nợ (không do BE-008)**: `POST/GET/PATCH /admin/wallpapers` khai response `Wallpaper` nhưng server trả thêm `status` + `failure_reason` — sai lệch có từ BE-004. Muốn khai đúng thì định nghĩa schema `AdminWallpaper` (`allOf`) và áp cho cả 3 verb trong một lần.
+- **Quyết định gốc**: chạy ngay sau BE-005, TRƯỚC BE-006 (project lead 2026-07-27: mobile thiếu data để bám prototype, không đợi hết hardening).
 - **Branch**: `BE-008-mobile-driven-content`
 - **Depends on**: BE-003 (models Wallpaper/Collection), BE-004 (admin CRUD + storage). **Không** phụ thuộc BE-005.
 - **Nguồn**: 2 ask từ repo mobile (design pass MO-004, 2026-07-27) — gộp 1 spec vì cùng chạm `apps/wallpapers`, cùng 1 lần bump contract + 1 lần sync mobile:
