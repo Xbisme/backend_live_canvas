@@ -4,6 +4,7 @@ from unittest import mock
 
 import pytest
 
+from apps.audit.models import AuditLogEntry
 from apps.uploads.models import UploadPurpose, UploadSlot
 from apps.wallpapers.models import Collection, Tag
 from apps.wallpapers.tests.factories import (
@@ -171,3 +172,77 @@ def test_video_slot_cannot_be_used_as_cover(admin_client, admin_user):
     )
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+# --- Home-screen curation (US2, contract v0.7.0) -----------------------------
+
+
+def test_create_collection_defaults_to_off_home(admin_client, api):
+    """Staying off the home screen is the default for every collection (spec FR-001)."""
+    res = admin_client.post(
+        "/admin/collections", _collection_body([WallpaperFactory()]), format="json"
+    )
+    assert res.status_code == 201
+    assert Collection.objects.get(slug="night-set").show_on_home is False
+    assert api.get("/home").json() == {"sections": []}
+
+
+def test_create_collection_on_home(admin_client, api):
+    res = admin_client.post(
+        "/admin/collections",
+        _collection_body([WallpaperFactory()], show_on_home=True, home_position=2),
+        format="json",
+    )
+    assert res.status_code == 201
+    section = api.get("/home").json()["sections"][0]
+    assert section["key"] == "night-set"
+    assert Collection.objects.get(slug="night-set").home_position == 2
+
+
+def test_patch_moves_and_unflags_section(admin_client, api):
+    first = CollectionFactory(slug="first", show_on_home=True, home_position=0)
+    second = CollectionFactory(slug="second", show_on_home=True, home_position=1)
+    CollectionItemFactory(collection=first, position=0)
+    CollectionItemFactory(collection=second, position=0)
+
+    # Move `second` in front of `first`.
+    assert (
+        admin_client.patch(
+            f"/admin/collections/{second.pk}", {"home_position": 0}, format="json"
+        ).status_code
+        == 200
+    )
+    assert (
+        admin_client.patch(
+            f"/admin/collections/{first.pk}", {"home_position": 1}, format="json"
+        ).status_code
+        == 200
+    )
+    assert [s["key"] for s in api.get("/home").json()["sections"]] == ["second", "first"]
+
+    # Unflagging removes the section but leaves the collection and its own page intact.
+    admin_client.patch(f"/admin/collections/{first.pk}", {"show_on_home": False}, format="json")
+    assert [s["key"] for s in api.get("/home").json()["sections"]] == ["second"]
+    assert api.get(f"/collections/{first.pk}").status_code == 200
+    assert len(api.get(f"/collections/{first.pk}").json()["items"]) == 1
+
+
+def test_home_flag_changes_are_audited(admin_client, admin_user):
+    col = CollectionFactory(slug="curated")
+    admin_client.patch(
+        f"/admin/collections/{col.pk}", {"show_on_home": True, "home_position": 1}, format="json"
+    )
+
+    entry = AuditLogEntry.objects.filter(action="collection.update").latest("id")
+    assert entry.actor == admin_user
+    assert entry.object_id == str(col.pk)
+
+
+def test_home_flags_are_admin_input_only(admin_client, api):
+    """`GET /collections` must not grow the two curation fields (contract delta §2.4)."""
+    col = CollectionFactory(slug="on-home", show_on_home=True, home_position=0)
+    CollectionItemFactory(collection=col, position=0)
+
+    row = next(c for c in api.get("/collections").json() if c["slug"] == "on-home")
+    assert "show_on_home" not in row
+    assert "home_position" not in row

@@ -28,7 +28,34 @@ info:
     `POST /iap/webhook/apple|google`. Entitlement định danh theo original transaction
     id (ổn định qua renewal); `in_grace_period` được coi là còn quyền; tắt auto-renew
     mà còn trong kỳ → status=active, auto_renew=false. Không error code mới.
-  version: "0.5.0"
+
+    v0.6.0 (mobile-driven): thêm field `Wallpaper.description` (string, nullable) cho
+    mục "Mô tả" màn Wallpaper Detail — screen-inventory hàng #7. Khai báo trước ở
+    v0.6.0, backend implement thật ở v0.7.0 (BE-008). Additive/nullable nên tương
+    thích ngược. Related-wallpapers KHÔNG thêm endpoint — client suy theo
+    `GET /wallpapers?tags=<tag đầu>` (đã có).
+
+    v0.7.0 (BE-008): Browse có section curated. Thêm `GET /home` (app tier, KHÔNG phân
+    trang) trả **tối đa 10 section, mỗi section tối đa 10 wallpaper** theo thứ tự
+    curate. Section = Collection được admin bật `show_on_home` + `home_position` —
+    KHÔNG có resource mới. Trần áp lúc ĐỌC: admin bật dư thì phần dư bị bỏ qua im
+    lặng, không lỗi và không chặn thao tác admin. Section rỗng (không còn wallpaper
+    hiển thị được) bị bỏ hẳn và KHÔNG chiếm slot. Trùng `home_position` → thứ tự vẫn
+    ổn định giữa các request (tie-break theo id). Premium chỉ hiển thị badge; gate
+    entitlement vẫn duy nhất ở `download-url`. `Wallpaper.description` nay trả giá trị
+    thật (rỗng/whitespace → null). Thêm `PATCH /admin/wallpapers/{id}` chỉ sửa
+    `description`. Admin bật section qua `show_on_home` + `home_position` trong body
+    `POST|PATCH /admin/collections` — payload công khai `GET /collections` KHÔNG đổi.
+    Không error code mới. ⚠️ Đổi schema/path → mobile PHẢI regenerate client.
+
+    v0.7.1 (BE-008, sửa mô tả contract — KHÔNG đổi hành vi server): các endpoint
+    `/admin/wallpapers` từ BE-004 tới nay khai response là `Wallpaper` (18 field) nhưng
+    server thực tế trả 20 (`AdminWallpaperSerializer` thêm `status` + `failure_reason`).
+    Thêm schema `AdminWallpaper` (allOf Wallpaper + 2 field đó) và
+    `AdminWallpaperCursorPage`, áp cho POST/GET/PATCH `/admin/wallpapers`. Đây là sửa
+    contract cho khớp hành vi có sẵn — KHÔNG có thay đổi phía server, KHÔNG ảnh hưởng
+    tầng app. Mobile KHÔNG cần regenerate (chỉ chạm admin tier, app không gọi `/admin/*`).
+  version: "0.7.1"
 
 servers:
   - url: https://api.example.com/v1
@@ -116,6 +143,14 @@ components:
       properties:
         id: { type: integer }
         title: { type: string }
+        description:
+          type: string
+          nullable: true
+          description: >
+            Mô tả ngắn của wallpaper — hiển thị ở mục "Mô tả" màn Wallpaper Detail.
+            Khai báo ở v0.6.0, backend trả giá trị THẬT từ v0.7.0 (BE-008). `null` =
+            chưa có mô tả (backend chuẩn hoá chuỗi rỗng/toàn khoảng trắng thành null),
+            client ẩn mục "Mô tả" bằng phép kiểm tra null — không cần so chuỗi rỗng.
         category: { $ref: '#/components/schemas/Category' }
         tags:
           type: array
@@ -183,12 +218,91 @@ components:
               type: array
               items: { $ref: '#/components/schemas/Wallpaper' }
 
+    HomeSection:
+      type: object
+      description: >
+        (v0.7.0) Một hàng curated ở màn Browse. Đây là projection lúc đọc của 1 Collection
+        được admin bật `show_on_home` — KHÔNG phải resource riêng, không lưu trong DB.
+      required: [key, title, collection_id, is_premium, items]
+      properties:
+        key:
+          type: string
+          example: "neon-nights"
+          description: >
+            Slug của collection. Định danh ổn định cho client (analytics/scroll-state) —
+            đổi `title` không làm đổi `key`.
+        title: { type: string, example: "Neon về đêm" }
+        collection_id:
+          type: integer
+          description: Target của "Xem tất cả" → `GET /collections/{id}` (đã có).
+        cover_url: { type: string, format: uri }
+        accent_color:
+          type: string
+          nullable: true
+          example: "#FF6F9C"
+        is_premium:
+          type: boolean
+          description: CHỈ để hiển thị badge/nút "Mở khoá" — KHÔNG phải gate entitlement.
+        items:
+          type: array
+          maxItems: 10
+          description: >
+            Tối đa 10 wallpaper published theo đúng thứ tự curate (`position`). Cùng schema
+            Wallpaper như mọi list khác — `collections` rỗng.
+          items: { $ref: '#/components/schemas/Wallpaper' }
+
+    HomeResponse:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          maxItems: 10
+          description: >
+            Tối đa 10 section, sắp theo `home_position` tăng dần (trùng vị trí → tie-break
+            theo id, ổn định giữa các request). Chưa bật collection nào → mảng rỗng.
+          items: { $ref: '#/components/schemas/HomeSection' }
+
     WallpaperCursorPage:
       type: object
       properties:
         items:
           type: array
           items: { $ref: '#/components/schemas/Wallpaper' }
+        next_cursor:
+          type: string
+          nullable: true
+          description: Truyền lại vào `cursor` để lấy trang tiếp theo. null = hết dữ liệu.
+        has_more: { type: boolean }
+
+    AdminWallpaper:
+      description: >
+        (v0.7.1) Wallpaper ở tầng ADMIN — shape công khai cộng 2 field vòng đời chỉ admin
+        thấy. Hai field này KHÔNG BAO GIỜ xuất hiện ở tầng app (`X-App-Key`): public tier
+        chỉ thấy wallpaper đã published nên `status`/`failure_reason` vô nghĩa và
+        `failure_reason` có thể lộ chi tiết nội bộ của pipeline.
+      allOf:
+        - $ref: '#/components/schemas/Wallpaper'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [processing, published, failed]
+              description: Trạng thái pipeline. Wallpaper mới đăng ký là `processing`.
+            failure_reason:
+              type: string
+              nullable: true
+              description: >
+                Lý do khi `status=failed` (stderr ffmpeg đã cắt / kết luận sniff). Chỉ đọc,
+                chỉ admin — dùng cho màn admin lọc `GET /admin/wallpapers?status=failed`.
+
+    AdminWallpaperCursorPage:
+      type: object
+      description: (v0.7.1) Như `WallpaperCursorPage` nhưng `items` là `AdminWallpaper`.
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminWallpaper' }
         next_cursor:
           type: string
           nullable: true
@@ -260,6 +374,12 @@ components:
       required: [title, category_id, orientation, upload_key]
       properties:
         title: { type: string }
+        description:
+          type: string
+          nullable: true
+          description: >
+            (v0.7.0) Mô tả ngắn, optional. Chuỗi rỗng hoặc toàn khoảng trắng được chuẩn hoá
+            thành `null` để client ẩn mục "Mô tả" chỉ bằng phép kiểm tra null.
         category_id: { type: integer }
         tag_ids:
           type: array
@@ -292,6 +412,19 @@ components:
           description: upload_key ảnh cover (lấy từ POST /admin/uploads/presign)
         accent_color: { type: string, nullable: true, example: "#FF6F9C" }
         is_premium: { type: boolean, default: false }
+        show_on_home:
+          type: boolean
+          default: false
+          description: >
+            (v0.7.0) Cho collection này hiện thành section ở màn Browse (`GET /home`).
+            Mặc định tắt. Bật quá 10 collection vẫn hợp lệ — trần chỉ áp lúc đọc.
+        home_position:
+          type: integer
+          default: 0
+          minimum: 0
+          description: >
+            (v0.7.0) Vị trí section trên Browse, tăng dần. KHÔNG unique — trùng vị trí thì
+            tie-break theo id. Vô nghĩa khi `show_on_home=false`.
         wallpaper_ids:
           type: array
           items: { type: integer }
@@ -308,6 +441,8 @@ components:
         cover_upload_key: { type: string }
         accent_color: { type: string, nullable: true }
         is_premium: { type: boolean }
+        show_on_home: { type: boolean, description: (v0.7.0) Bật/tắt section ở màn Browse }
+        home_position: { type: integer, minimum: 0, description: "(v0.7.0) Vị trí section, tăng dần" }
         wallpaper_ids:
           type: array
           items: { type: integer }
@@ -342,8 +477,8 @@ components:
     AdminTokenResponse:
       type: object
       properties:
-        access: { type: string, description: JWT access — gắn `Authorization Bearer` cho /admin/*, sống 30 phút }
-        refresh: { type: string, description: Refresh token MỚI (rotate mỗi lần dùng; bản cũ bị vô hiệu), sống 7 ngày }
+        access: { type: string, description: "JWT access — gắn `Authorization Bearer` cho /admin/*, sống 30 phút" }
+        refresh: { type: string, description: "Refresh token MỚI (rotate mỗi lần dùng; bản cũ bị vô hiệu), sống 7 ngày" }
         expires_in: { type: integer, example: 1800, description: Số giây còn lại của access token }
 
 paths:
@@ -380,10 +515,38 @@ paths:
                 - { id: 0, slug: "all", name: "Tất cả", wallpaper_count: 128 }
                 - { id: 12, slug: "neon", name: "Neon", wallpaper_count: 87 }
 
+  /home:
+    get:
+      tags: [Public]
+      summary: >
+        (v0.7.0) Màn Browse dạng section curated. KHÔNG phân trang, bounded cứng:
+        tối đa 10 section × tối đa 10 wallpaper/section. Trần áp LÚC ĐỌC — admin bật dư
+        thì phần dư bị bỏ qua im lặng (không lỗi, không chặn admin lúc ghi). Section sắp
+        theo `home_position` tăng dần, trùng vị trí thì tie-break theo id nên thứ tự ổn
+        định giữa các request. Chỉ chứa wallpaper published; section không còn wallpaper
+        nào hiển thị được thì bị bỏ hẳn khỏi mảng VÀ không chiếm slot (section kế tiếp lấp
+        vào). Chưa bật collection nào → `sections: []` + 200 (KHÔNG phải 404). "Xem tất cả"
+        của 1 section = gọi `GET /collections/{collection_id}` đã có. Không nhận và không
+        đọc `transaction_id` — premium chỉ hiển thị badge, gate vẫn ở `download-url`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeResponse' }
+        '401':
+          description: INVALID_APP_KEY
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
   /collections:
     get:
       tags: [Public]
-      summary: Danh sách bộ sưu tập curated (không phân trang — chỉ meta, không nhúng items)
+      summary: >
+        Danh sách bộ sưu tập curated (không phân trang — chỉ meta, không nhúng items).
+        v0.7.0 KHÔNG đổi payload này: `show_on_home`/`home_position` là input phía admin,
+        không xuất hiện ở đây.
       responses:
         '200':
           description: OK
@@ -654,10 +817,10 @@ paths:
             schema: { $ref: '#/components/schemas/AdminWallpaperCreateRequest' }
       responses:
         '201':
-          description: Đã tạo, đang xử lý bất đồng bộ (transcode/scan)
+          description: Đã tạo, đang xử lý bất đồng bộ (transcode/scan) — `status=processing`
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Wallpaper' }
+              schema: { $ref: '#/components/schemas/AdminWallpaper' }
         '400':
           description: >
             Dữ liệu không hợp lệ, tag_ids chứa ID không tồn tại, upload_key đã dùng,
@@ -679,12 +842,43 @@ paths:
           schema: { type: string, enum: [processing, published, failed] }
       responses:
         '200':
+          description: >
+            OK — gồm cả wallpaper chưa publish. Lọc `?status=failed` để soi
+            `failure_reason` của các bản chạy hỏng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminWallpaperCursorPage' }
+
+  /admin/wallpapers/{id}:
+    patch:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      summary: >
+        (v0.7.0) Sửa mô tả của wallpaper đã tồn tại. CHỈ nhận `description` — không sửa được
+        bất kỳ thuộc tính nào khác (media/status/tag/category/collection giữ luồng riêng);
+        field lạ trong body bị bỏ qua. Chuỗi rỗng hoặc toàn khoảng trắng → lưu thành `null`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description]
+              properties:
+                description: { type: string, nullable: true }
+      responses:
+        '200':
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/WallpaperCursorPage' }
-
-  /admin/wallpapers/{id}:
+              schema: { $ref: '#/components/schemas/AdminWallpaper' }
+        '404':
+          description: Not found
     delete:
       tags: [Admin]
       security: [{ AdminBearer: [] }]

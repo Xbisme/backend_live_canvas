@@ -36,12 +36,16 @@ class TagAdmin(admin.ModelAdmin):
 class WallpaperAdmin(admin.ModelAdmin):
     list_display = ["id", "title", "category", "orientation", "is_premium", "status", "created_at"]
     list_filter = ["status", "is_premium", "orientation", "category"]
-    search_fields = ["title"]
+    search_fields = ["title", "description"]
     filter_horizontal = ["tags"]
 
 
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    list_display = ["id", "slug", "title", "is_premium", "created_at"]
+    # ``show_on_home``/``home_position`` are editable straight from the changelist so staff can
+    # rearrange the Browse screen in one screen instead of opening each collection (v0.7.0).
+    list_display = ["id", "slug", "title", "is_premium", "show_on_home", "home_position"]
+    list_editable = ["show_on_home", "home_position"]
+    list_filter = ["show_on_home", "is_premium"]
     prepopulated_fields = {"slug": ["title"]}
     inlines = [CollectionItemInline]

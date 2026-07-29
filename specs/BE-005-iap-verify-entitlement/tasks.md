@@ -32,7 +32,7 @@ colocated per app (`apps/iap/tests/`, `apps/wallpapers/tests/`, `core/tests/`).
 **Purpose**: contract-first bump + dependencies + config, before any server code (Constitution I, XI, VIII).
 
 - [X] T001 Bump contract to **v0.5.0** in `.claude/openapi.yaml` (`info.version`, `download-url` summary → real premium gate, top description note) and `.claude/api-context.md` (header version, "Đổi so với v0.4.0" note, update download-url + IAP sections to drop "402 vô điều kiện / gate mở ở BE-005"), per [contracts/iap-contract-delta.md](contracts/iap-contract-delta.md)
-- [ ] T002 Sync both contract files verbatim to `livecanvas-mobile` (`.claude/` + `contracts/`) and note the sync in the mobile changelog (cross-repo, manual)
+- [X] T002 Sync both contract files verbatim to `livecanvas-mobile` (`.claude/` + `contracts/`) and note the sync in the mobile changelog (cross-repo, manual) — done 2026-07-26: also synced `screen-inventory.md`, bumped mobile `project-context.md`/`sdd-roadmap.md` headers, and corrected the MO-006 sync point from BE-004 to BE-005
 - [X] T003 [P] Add `app-store-server-library==3.1.2`, `google-api-python-client==2.198.0`, `google-auth==2.56.2` to `requirements/base.in`; compile locks with `uv pip compile --universal --python-version 3.11`; commit `base.in` + `base.txt`
 - [X] T004 [P] Add IAP env keys (`IAP_APPLE_*`, `IAP_GOOGLE_*`) across `config/settings/base.py` (default=""), `config/settings/prod.py` (no-default fail-fast), `config/settings/dev.py` (sandbox), and document them in `.env.dev.example` + `.env.prod.example`
 

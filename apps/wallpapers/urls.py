@@ -10,6 +10,7 @@ from apps.wallpapers.views import (
     CategoryListView,
     CollectionDetailView,
     CollectionListView,
+    HomeView,
     TagListView,
     WallpaperBatchView,
     WallpaperDetailView,
@@ -18,6 +19,7 @@ from apps.wallpapers.views import (
 )
 
 urlpatterns = [
+    path("home", HomeView.as_view(), name="home"),
     path("categories", CategoryListView.as_view(), name="category-list"),
     path("tags", TagListView.as_view(), name="tag-list"),
     path("collections", CollectionListView.as_view(), name="collection-list"),

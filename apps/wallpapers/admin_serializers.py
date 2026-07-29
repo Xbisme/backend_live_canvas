@@ -12,10 +12,25 @@ from apps.wallpapers.serializers import WallpaperListSerializer
 from core.errors import TagNotFound
 
 
+def _normalize_description(value: str | None) -> str | None:
+    """Blank in → ``None`` out. The one place this invariant lives (spec FR-017).
+
+    The client hides the "description" block on a null check alone, so an empty or
+    whitespace-only string must never reach the column — it would render as an empty block.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 class AdminWallpaperCreateSerializer(serializers.Serializer):
     """POST /admin/wallpapers body — validates curated references (Constitution IX)."""
 
     title = serializers.CharField(max_length=200)
+    description = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default=None
+    )
     category_id = serializers.IntegerField()
     tag_ids = serializers.ListField(
         child=serializers.IntegerField(), allow_empty=True, max_length=50
@@ -25,6 +40,9 @@ class AdminWallpaperCreateSerializer(serializers.Serializer):
     source_url = serializers.URLField(max_length=500)
     license_type = serializers.CharField(max_length=120)
     upload_key = serializers.CharField(max_length=255)
+
+    def validate_description(self, value: str | None) -> str | None:
+        return _normalize_description(value)
 
     def validate_category_id(self, value: int) -> int:
         if not Category.objects.filter(pk=value).exists():
@@ -39,6 +57,20 @@ class AdminWallpaperCreateSerializer(serializers.Serializer):
             # Catalog error, not a generic 400 — curated integrity (spec FR-008).
             raise TagNotFound(f"Unknown tag ids: {missing}.")
         return value
+
+
+class AdminWallpaperUpdateSerializer(serializers.Serializer):
+    """PATCH /admin/wallpapers/{id} body — **exactly one** writable field (contract v0.7.0).
+
+    Deliberately not a subclass of the create serializer: keeping this to a single declared
+    field is what makes "the edit cannot touch anything else" structural rather than a promise.
+    Extra keys in the body are simply not read (spec FR-015).
+    """
+
+    description = serializers.CharField(allow_blank=True, allow_null=True)
+
+    def validate_description(self, value: str | None) -> str | None:
+        return _normalize_description(value)
 
 
 class AdminWallpaperSerializer(WallpaperListSerializer):
@@ -75,6 +107,11 @@ class AdminCollectionSerializer(serializers.Serializer):
         regex=r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$", required=False, allow_null=True, default=None
     )
     is_premium = serializers.BooleanField(default=False)
+    # Home-screen placement (v0.7.0). Deliberately NOT validated against the section cap:
+    # the cap is trimmed at read time, so flagging an 11th collection must never fail here
+    # (spec FR-007). ``home_position`` is not unique either — ties break on id.
+    show_on_home = serializers.BooleanField(required=False, default=False)
+    home_position = serializers.IntegerField(required=False, min_value=0, default=0)
     wallpaper_ids = serializers.ListField(
         child=serializers.IntegerField(), allow_empty=True, max_length=100
     )

@@ -7,13 +7,14 @@ edge (real entitlement + presigning land in BE-005).
 
 from datetime import timedelta
 
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 from django.http import Http404
 
 from apps.wallpapers.models import (
     RESERVED_TAG_SLUGS,
     Category,
     Collection,
+    CollectionItem,
     Orientation,
     Tag,
     Wallpaper,
@@ -25,6 +26,13 @@ from core.errors import EntitlementRequired, ValidationFailed
 _PUBLISHED_Q = Q(wallpapers__status=WallpaperStatus.PUBLISHED, wallpapers__deleted_at__isnull=True)
 
 DOWNLOAD_URL_TTL = timedelta(minutes=5)  # Constitution III — presigned URLs expire ≤ 5 minutes.
+
+# Home-screen bounds (contract v0.7.0). Both numbers are PUBLISHED in openapi.yaml
+# (``maxItems``) and api-context, so the client sizes its UI from them — keep them here as
+# constants rather than settings, otherwise dev and prod could serve a shape the contract does
+# not describe. Enforced at read time only: flagging more collections is never an error.
+HOME_MAX_SECTIONS = 10
+HOME_MAX_ITEMS_PER_SECTION = 10
 
 # The virtual "All" tag prepended to GET /tags (contract v0.3.2). id=0 is reserved; a real
 # BigAutoField PK is always ≥ 1, so there is never a collision.
@@ -138,6 +146,52 @@ def collection_items(collection: Collection) -> list:
         .order_by("position")
         if item.wallpaper.status == WallpaperStatus.PUBLISHED and item.wallpaper.deleted_at is None
     ]
+
+
+def build_home_sections() -> list[dict]:
+    """The Browse screen: curated sections, assembled in a constant number of queries.
+
+    A section IS a ``Collection`` the operator flagged with ``show_on_home`` — there is no
+    separate model (spec Key Entities). Ordering is ``home_position`` then ``id``: the explicit
+    ``order_by`` is required because ``Collection.Meta.ordering`` is ``-created_at`` and would
+    silently invert the operator's stack (research D3).
+
+    Caps and empty-section skipping run in Python over prefetched rows, not as SQL ``LIMIT``.
+    That is what makes FR-008 expressible at all: a section is only known to be empty *after*
+    its visible members are resolved, and an empty one must not consume one of the slots — so
+    the trim cannot happen in the outer query (research D4).
+    """
+    # Category/Tag are prefetched WITH their published-count annotation, not merely
+    # select_related: the nested serializers fall back to a per-object ``COUNT(*)`` when the
+    # annotation is missing, which would fire one query per distinct category and per tag on
+    # the app's very first screen. Annotating here keeps the whole screen at four queries.
+    visible_items = (
+        CollectionItem.objects.filter(
+            wallpaper__status=WallpaperStatus.PUBLISHED,
+            wallpaper__deleted_at__isnull=True,
+        )
+        .select_related("wallpaper")
+        .prefetch_related(
+            Prefetch("wallpaper__category", queryset=categories_with_counts()),
+            Prefetch("wallpaper__tags", queryset=tags_with_counts()),
+        )
+        .order_by("position")
+    )
+    candidates = (
+        Collection.objects.filter(show_on_home=True)
+        .order_by("home_position", "id")
+        .prefetch_related(Prefetch("items", queryset=visible_items, to_attr="visible_items"))
+    )
+
+    sections: list[dict] = []
+    for collection in candidates:
+        items = [item.wallpaper for item in collection.visible_items][:HOME_MAX_ITEMS_PER_SECTION]
+        if not items:
+            continue  # dropped section does not consume a slot (FR-008)
+        sections.append({"collection": collection, "items": items})
+        if len(sections) == HOME_MAX_SECTIONS:
+            break
+    return sections
 
 
 def batch_wallpapers(ids: list) -> QuerySet:

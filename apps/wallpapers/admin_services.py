@@ -37,6 +37,22 @@ def soft_delete_wallpaper(pk: int) -> Wallpaper:
     return wallpaper
 
 
+def update_wallpaper_description(pk: int, description: str | None) -> Wallpaper:
+    """Set/clear one wallpaper's description — the narrowest possible write (spec FR-015).
+
+    ``update_fields`` keeps the UPDATE scoped to that single column, so nothing else can be
+    clobbered even if the instance in memory drifted. Soft-deleted rows are invisible here,
+    same as ``soft_delete_wallpaper``.
+    """
+    try:
+        wallpaper = Wallpaper.objects.get(pk=pk, deleted_at__isnull=True)
+    except Wallpaper.DoesNotExist:
+        raise Http404 from None
+    wallpaper.description = description
+    wallpaper.save(update_fields=["description"])
+    return wallpaper
+
+
 def create_tag(slug: str, name: str) -> Tag:
     try:
         validate_tag_slug(slug)  # reserved "all" (Constitution IX)
