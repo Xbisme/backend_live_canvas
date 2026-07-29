@@ -4,7 +4,7 @@
 >
 > **Vai trò file này**: pure planning cho track backend. Trạng thái hiện tại → [`project-context.md`](project-context.md). Ship history → [`changelog.md`](changelog.md).
 >
-> Last updated: 2026-07-29 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP implement xong trên branch**, Contract Sync v0.5.0 đã xong, chờ merge · **BE-008 IMPLEMENT XONG trên branch `BE-008-mobile-driven-content`** — contract **v0.7.0**, 237 tests xanh, đã sync mobile · **spec tiếp theo: BE-006 Security Hardening**)
+> Last updated: 2026-07-29 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP implement xong trên branch**, Contract Sync v0.5.0 đã xong, chờ merge · **BE-008 IMPLEMENT XONG trên branch `BE-008-mobile-driven-content`** — contract **v0.7.1**, 240 tests xanh, đã sync mobile · **spec tiếp theo: BE-006 Security Hardening**)
 >
 > ✅ **BE-008 đã ship trên branch (2026-07-29)** — 2 ask từ mobile gộp làm một, chạy trước BE-006 đúng như kế hoạch:
 > (1) `Wallpaper.description` **nay có giá trị thật** (v0.6.0 mới chỉ khai báo) + `PATCH /admin/wallpapers/{id}` để điền mô tả cho catalog cũ.
@@ -61,13 +61,14 @@ BE-005: IAP Verify & Entitlement                  ⇄ Điểm đồng bộ: repo
  trên download-url)
     │
     ▼
-BE-008: Mobile-Driven Content  🔜 KẾ TIẾP        ⇄ Điểm đồng bộ: mobile đang chờ cả 2 —
-(Wallpaper.description + Browse sections              mục "Mô tả" ở Detail và Browse dạng
- curated tái dùng Collection → GET /home)             section có tiêu đề (hiện là lưới phẳng)
+BE-008: Mobile-Driven Content  ✅ DONE (branch)   ⇄ Điểm đồng bộ: ĐÃ sync mobile v0.7.0+v0.7.1;
+(Wallpaper.description + Browse sections              mobile đã regenerate client và dựng xong
+ curated tái dùng Collection → GET /home)             Browse dạng section + mục "Mô tả"
     │
     ▼
-BE-006: Security Hardening & Production Readiness
-(Rate limit, WAF, audit log, Sentry, load test)
+BE-006: Security Hardening  🔜 KẾ TIẾP
+(Rate limit, WAF, audit log, Sentry, load test,
+ ClamAV, + nợ N+1 COUNT(*) chuyển từ BE-008)
     │
     ▼
 BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo mobile chờ backend
@@ -143,12 +144,19 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 - **Còn lại**: đấu nối credential store thật + verify end-to-end (adapter hiện validate qua mock; live-store để staging BE-006/7).
 - **⚠️ Điểm đồng bộ**: báo repo mobile khi merge — họ cần endpoint này hoạt động thật để test MO-005 end-to-end.
 
-### BE-006: Security Hardening & Production Readiness
+### BE-006: Security Hardening & Production Readiness 🔜 KẾ TIẾP
 
 - **Status**: ⬜ Not started
 - **Branch**: `BE-006-security-hardening`
-- **Depends on**: BE-004, BE-005
-- **Scope**: Rate limiting, WAF/CDN rules, Sentry, load test (Locust) cho presigned URL + verify-receipt, OWASP Top 10 review (đặc biệt IDOR ở `download-url`).
+- **Depends on**: BE-004, BE-005, BE-008
+- **Scope**: Rate limiting, WAF/CDN rules, Sentry, load test (Locust) cho presigned URL + verify-receipt, OWASP Top 10 review (đặc biệt IDOR ở `download-url`), + **ClamAV** (hoãn từ BE-004, deviation Constitution VII đã duyệt).
+- **🆕 Nợ hiệu năng chuyển từ BE-008 (2026-07-29)** — **N+1 `COUNT(*)` ở các list endpoint public**:
+  - Gốc rễ: `_CountFromAnnotation` trong `apps/wallpapers/serializers.py` (~line 12-26). Khi `CategorySerializer`/`TagSerializer` được **lồng bên trong** payload wallpaper, không có annotation nên nó fallback `obj.wallpapers.published().count()` → **1 query cho mỗi category và mỗi tag của mỗi item**. Comment tại chỗ đã tự thừa nhận từ BE-003 ("acceptable at BE-003 scale; revisit if it shows up in profiling") — giờ là lúc revisit.
+  - **`GET /home` đã được xử lý ở BE-008**: prefetch **kèm annotation** (`Prefetch("wallpaper__category", queryset=categories_with_counts())` + tương tự cho tags) → 4 query cố định, có test `django_assert_num_queries` chặn hồi quy. Dùng đúng cách này làm khuôn.
+  - **Còn nguyên vấn đề**: `GET /wallpapers` (cursor, tới 100 item/trang — nặng nhất), `POST /wallpapers/batch` (tới 100 id), `GET /collections/{id}` (`services.collection_items`, tới 100 item), `GET /admin/wallpapers`. Đây đều là các list dùng `select_related("category").prefetch_related("tags")` **không kèm annotation**.
+  - Định hướng: hoặc áp khuôn prefetch-có-annotation cho cả 4 chỗ, hoặc bỏ hẳn `wallpaper_count` khỏi category/tag **lồng trong wallpaper** (client chỉ cần count ở `/categories`, `/tags` — kiểm với mobile trước vì đây là **contract change** nếu bỏ field).
+  - Định nghĩa xong: mỗi endpoint trên có test `django_assert_num_queries` khẳng định số query **không tăng theo số item** (giống `apps/wallpapers/tests/test_home.py`).
+- ~~**Nợ contract từ BE-004**: `/admin/wallpapers` khai `Wallpaper` (18) nhưng trả 20~~ → ✅ **đã fix trong BE-008 (2026-07-29, contract v0.7.1)**: thêm `AdminWallpaper` (`allOf`) + `AdminWallpaperCursorPage`, áp cho cả POST/GET/PATCH; sửa mô tả contract cho khớp hành vi, **không đổi phía server**. Có 3 test chặn hồi quy trong `test_admin_wallpapers.py` (so trực tiếp payload admin vs public; khẳng định `status`/`failure_reason` không bao giờ rò xuống app tier). Đã sync mobile — họ không cần regenerate.
 
 ### BE-007: Deploy & Launch Support
 
@@ -160,7 +168,7 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-008: Mobile-Driven Content — Browse Sections + Wallpaper Description ✅
 
-- **Status**: 🟢 **Implemented trên branch `BE-008-mobile-driven-content` (2026-07-29)** — SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; **35/35 task, 237 tests xanh** (+41 so với BE-005), ruff sạch, không migration drift, Contract Sync v0.7.0 → mobile đã xong. Chờ review/merge.
+- **Status**: 🟢 **Implemented trên branch `BE-008-mobile-driven-content` (2026-07-29)** — SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; **35/35 task, 240 tests xanh** (+41 so với BE-005), ruff sạch, không migration drift, Contract Sync v0.7.0 + v0.7.1 → mobile đã xong. Chờ review/merge.
 - **Đã ship**: `GET /home` (app tier, không phân trang, ≤10 section × ≤10 wallpaper, trần áp lúc đọc); `Collection.show_on_home`/`home_position` + index `coll_home_idx`; `Wallpaper.description` thật + `PATCH /admin/wallpapers/{id}` (serializer **1 field** nên không sửa được thứ khác); Django-admin sửa cờ home ngay trên changelist.
 - **Số đo thật**: `/home` chạy **4 query cố định** bất kể 1 hay 100 wallpaper (test `django_assert_num_queries`), **p95 = 37 ms** trên màn đầy — thừa ngưỡng SC-005 (<300 ms), không cần cache.
 - **Bẫy đã xử lý khi implement**: (1) `Collection.Meta.ordering = -created_at` sẽ âm thầm đảo ngược stack nếu quên `order_by("home_position","id")` — có test chặn; (2) nested `CategorySerializer`/`TagSerializer` fallback `COUNT(*)` mỗi object → N+1 trên chính màn đầu tiên app gọi; sửa bằng `Prefetch` **kèm annotation** thay vì `select_related` thuần.

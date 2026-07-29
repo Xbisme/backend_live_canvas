@@ -47,7 +47,15 @@ info:
     `description`. Admin bật section qua `show_on_home` + `home_position` trong body
     `POST|PATCH /admin/collections` — payload công khai `GET /collections` KHÔNG đổi.
     Không error code mới. ⚠️ Đổi schema/path → mobile PHẢI regenerate client.
-  version: "0.7.0"
+
+    v0.7.1 (BE-008, sửa mô tả contract — KHÔNG đổi hành vi server): các endpoint
+    `/admin/wallpapers` từ BE-004 tới nay khai response là `Wallpaper` (18 field) nhưng
+    server thực tế trả 20 (`AdminWallpaperSerializer` thêm `status` + `failure_reason`).
+    Thêm schema `AdminWallpaper` (allOf Wallpaper + 2 field đó) và
+    `AdminWallpaperCursorPage`, áp cho POST/GET/PATCH `/admin/wallpapers`. Đây là sửa
+    contract cho khớp hành vi có sẵn — KHÔNG có thay đổi phía server, KHÔNG ảnh hưởng
+    tầng app. Mobile KHÔNG cần regenerate (chỉ chạm admin tier, app không gọi `/admin/*`).
+  version: "0.7.1"
 
 servers:
   - url: https://api.example.com/v1
@@ -261,6 +269,40 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/Wallpaper' }
+        next_cursor:
+          type: string
+          nullable: true
+          description: Truyền lại vào `cursor` để lấy trang tiếp theo. null = hết dữ liệu.
+        has_more: { type: boolean }
+
+    AdminWallpaper:
+      description: >
+        (v0.7.1) Wallpaper ở tầng ADMIN — shape công khai cộng 2 field vòng đời chỉ admin
+        thấy. Hai field này KHÔNG BAO GIỜ xuất hiện ở tầng app (`X-App-Key`): public tier
+        chỉ thấy wallpaper đã published nên `status`/`failure_reason` vô nghĩa và
+        `failure_reason` có thể lộ chi tiết nội bộ của pipeline.
+      allOf:
+        - $ref: '#/components/schemas/Wallpaper'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [processing, published, failed]
+              description: Trạng thái pipeline. Wallpaper mới đăng ký là `processing`.
+            failure_reason:
+              type: string
+              nullable: true
+              description: >
+                Lý do khi `status=failed` (stderr ffmpeg đã cắt / kết luận sniff). Chỉ đọc,
+                chỉ admin — dùng cho màn admin lọc `GET /admin/wallpapers?status=failed`.
+
+    AdminWallpaperCursorPage:
+      type: object
+      description: (v0.7.1) Như `WallpaperCursorPage` nhưng `items` là `AdminWallpaper`.
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminWallpaper' }
         next_cursor:
           type: string
           nullable: true
@@ -775,10 +817,10 @@ paths:
             schema: { $ref: '#/components/schemas/AdminWallpaperCreateRequest' }
       responses:
         '201':
-          description: Đã tạo, đang xử lý bất đồng bộ (transcode/scan)
+          description: Đã tạo, đang xử lý bất đồng bộ (transcode/scan) — `status=processing`
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Wallpaper' }
+              schema: { $ref: '#/components/schemas/AdminWallpaper' }
         '400':
           description: >
             Dữ liệu không hợp lệ, tag_ids chứa ID không tồn tại, upload_key đã dùng,
@@ -800,10 +842,12 @@ paths:
           schema: { type: string, enum: [processing, published, failed] }
       responses:
         '200':
-          description: OK
+          description: >
+            OK — gồm cả wallpaper chưa publish. Lọc `?status=failed` để soi
+            `failure_reason` của các bản chạy hỏng.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/WallpaperCursorPage' }
+              schema: { $ref: '#/components/schemas/AdminWallpaperCursorPage' }
 
   /admin/wallpapers/{id}:
     patch:
@@ -832,7 +876,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Wallpaper' }
+              schema: { $ref: '#/components/schemas/AdminWallpaper' }
         '404':
           description: Not found
     delete:

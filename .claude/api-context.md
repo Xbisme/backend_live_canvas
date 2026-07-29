@@ -4,7 +4,9 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (`livecanvas-backend`, `livecanvas-mobile`). Khi API đổi, sửa cả `openapi.yaml` lẫn `api-context.md` ở repo đang implement, rồi copy nguyên văn sang repo còn lại (xem "Contract Sync" trong `dev-workflow.md`).
 >
-> Last updated: 2026-07-29 · Contract version: **`v0.7.0`**
+> Last updated: 2026-07-29 · Contract version: **`v0.7.1`**
+>
+> **Đổi so với v0.7.0 (sửa mô tả contract, KHÔNG đổi hành vi server)**: các endpoint `/admin/wallpapers` từ BE-004 tới nay khai response `Wallpaper` (18 field) nhưng server luôn trả **20** — `AdminWallpaperSerializer` thêm `status` + `failure_reason`. Nay khai đúng bằng schema **`AdminWallpaper`** (`allOf: Wallpaper + status + failure_reason`) và **`AdminWallpaperCursorPage`**, áp cho `POST`/`GET`/`PATCH /admin/wallpapers`. **Không có thay đổi phía server**; tầng app không đụng tới; **mobile KHÔNG cần regenerate** (app không gọi `/admin/*`). Hai field này vẫn **tuyệt đối không** xuất hiện ở tầng app.
 >
 > **Đổi so với v0.6.0 (BE-008)** — ⚠️ **bump này ĐỔI PATH + SCHEMA, khác v0.5.0/v0.6.0: mobile BẮT BUỘC regenerate client** (`scripts/generate_api.sh`).
 > - **Màn Browse có section curated**: thêm `GET /home` (app tier) trả **cả màn trong 1 lần gọi**, KHÔNG phân trang, bounded cứng **≤10 section × ≤10 wallpaper/section**. Section **KHÔNG phải resource mới** — là `Collection` được admin bật `show_on_home` + `home_position`.
@@ -299,7 +301,7 @@ Format chung:
 ```
   - `tag_ids` **curated** — phải trỏ tới tag đã tồn tại; muốn tag mới, gọi `POST /admin/tags` trước.
   - `description` (v0.7.0) **optional**; chuỗi rỗng hoặc toàn khoảng trắng được chuẩn hoá thành `null`.
-- **201**: object `Wallpaper`, các field media (`thumbnail_url`, `resolution`...) = `null` vì đang xử lý bất đồng bộ
+- **201**: object **`AdminWallpaper`** (= `Wallpaper` + `status` + `failure_reason`); `status=processing` và các field media (`thumbnail_url`, `resolution`...) = `null` vì đang xử lý bất đồng bộ
 - **400**: `VALIDATION_ERROR` (thiếu field, `category_id` không tồn tại, `upload_key` đã dùng hoặc object chưa upload), `TAG_NOT_FOUND` (tag_ids sai)
 - **422**: `FILE_REJECTED` — bắn **đồng bộ** khi HEAD thấy file vượt 500 MB. Lỗi nội dung (sai định dạng thật; malware scan từ BE-006) phát hiện **bất đồng bộ** trong pipeline → `status=failed` + `failure_reason` (xem qua `GET /admin/wallpapers?status=failed`), không 422 lúc đó.
 - **401**: `UNAUTHORIZED_ADMIN` · **403**: `FORBIDDEN_ADMIN_ROLE`
@@ -307,7 +309,7 @@ Format chung:
 ### `GET /admin/wallpapers`
 - Header: `Authorization: Bearer <admin_jwt>`
 - Query: `cursor`, `limit`, `status` (`processing`|`published`|`failed`)
-- **200**: `WallpaperCursorPage` (bao gồm cả wallpaper chưa publish); item tầng admin kèm thêm `status` và `failure_reason` (lý do khi `failed` — chỉ hiển thị ở tier admin, không bao giờ xuất hiện ở public tier)
+- **200**: **`AdminWallpaperCursorPage`** — envelope cursor như thường, `items` là **`AdminWallpaper`** (bao gồm cả wallpaper chưa publish). `status` + `failure_reason` chỉ có ở tier admin, **không bao giờ** xuất hiện ở public tier.
 - **401**: `UNAUTHORIZED_ADMIN` · **403**: `FORBIDDEN_ADMIN_ROLE`
 
 ### `PATCH /admin/wallpapers/{id}` *(v0.7.0)*
@@ -316,7 +318,7 @@ Format chung:
 - **Body**: `{ "description": "Đèn neon phản chiếu trên mặt đường sau mưa." }`
   - **CHỈ nhận `description`** — mọi field khác trong body bị **bỏ qua**, không sửa được media/status/tag/category/collection (những thứ đó giữ luồng riêng).
   - `null`, chuỗi rỗng, hoặc toàn khoảng trắng → lưu `null` (client ẩn mục "Mô tả").
-- **200**: object `Wallpaper` sau khi sửa
+- **200**: object **`AdminWallpaper`** sau khi sửa
 - **404**: `NOT_FOUND` (không tồn tại hoặc đã xóa mềm) · **401**: `UNAUTHORIZED_ADMIN` · **403**: `FORBIDDEN_ADMIN_ROLE`
 
 ### `DELETE /admin/wallpapers/{id}`

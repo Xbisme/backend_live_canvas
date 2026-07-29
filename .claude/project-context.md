@@ -3,9 +3,9 @@
 > Repo: `livecanvas-backend` (Django + DRF)
 > Repo liên quan: `livecanvas-mobile` (Flutter, độc lập hoàn toàn — đồng bộ qua `contracts/openapi.yaml` + `.claude/api-context.md`, copy tay giữa 2 repo)
 >
-> Last updated: 2026-07-27 (BE-001→**BE-004 merged** vào `main` — PR #4+#5 · **BE-005 IAP implemented** trên branch, 196 tests xanh · **Contract Sync v0.5.0 → mobile ĐÃ XONG** (2026-07-26) · contract hiện tại **v0.6.0** · spec tiếp theo: **BE-006 Security**)
+> Last updated: 2026-07-27 (BE-001→**BE-004 merged** vào `main` — PR #4+#5 · **BE-005 IAP implemented** trên branch, 196 tests xanh · **Contract Sync v0.5.0 → mobile ĐÃ XONG** (2026-07-26) · contract hiện tại **v0.7.1** · spec tiếp theo: **BE-006 Security**)
 >
-> ✅ **BE-008 (2 ask mobile) đã IMPLEMENT XONG trên branch `BE-008-mobile-driven-content` (2026-07-29)** — contract **v0.7.0**, 237 tests xanh, đã sync mobile:
+> ✅ **BE-008 (2 ask mobile) đã IMPLEMENT XONG trên branch `BE-008-mobile-driven-content` (2026-07-29)** — contract **v0.7.1**, 240 tests xanh, đã sync mobile:
 > (1) `Wallpaper.description` **có giá trị thật** + `PATCH /admin/wallpapers/{id}` để điền mô tả cho 397 item catalog cũ;
 > (2) `GET /home` — Browse dạng **section curated**, tái dùng `Collection` (`show_on_home`/`home_position`), KHÔNG model mới, ≤10 section × ≤10 wallpaper, **4 query cố định**, p95 37 ms.
 > Chi tiết: `sdd-roadmap.md` §BE-008. **Số spec là ID, không phải thứ tự thi công** — BE-006/BE-007 giữ số cũ, chạy sau.
@@ -15,7 +15,7 @@
 > - Bắt đầu session mới → file này + `docs/PRD.md` + `CLAUDE.md` (khi có).
 > - Chuẩn bị họp spec mới → file này + [`sdd-roadmap.md`](sdd-roadmap.md).
 > - **Trước khi đổi/thêm bất kỳ API nào** → [`../docs/screen-inventory.md`](../docs/screen-inventory.md) TRƯỚC TIÊN (màn hình cần gì quyết định API, không phải ngược lại), rồi mới tới `api-context.md`.
-> - Cần biết chi tiết từng endpoint (header/body/response) → [`api-context.md`](api-context.md) + [`openapi.yaml`](openapi.yaml) — **contract version hiện tại: `v0.6.0`** (v0.5.0 = entitlement thật ở `download-url`; v0.6.0 = `Wallpaper.description` khai báo trước, backend chưa ship → trả `null`).
+> - Cần biết chi tiết từng endpoint (header/body/response) → [`api-context.md`](api-context.md) + [`openapi.yaml`](openapi.yaml) — **contract version hiện tại: `v0.7.1`** (v0.5.0 entitlement thật ở `download-url` · v0.6.0 khai `Wallpaper.description` · v0.7.0 `GET /home` + description có giá trị thật · v0.7.1 khai đúng `AdminWallpaper` cho `/admin/wallpapers`).
 > - Cần hiểu vì sao spec X ra đời → [`decisions/`](decisions/).
 > - Cần biết spec nào ship khi nào → [`changelog.md`](changelog.md).
 
@@ -39,8 +39,8 @@
   - ✅ **Contract v0.6.0 (mobile-driven, 2026-07-27)**: mobile bump + copy ngược sang repo này (3 file đã khớp verbatim). `Wallpaper.description` mới là **khai báo trước** — backend trả `null` cho tới khi ship BE-008; client ẩn mục "Mô tả" khi null.
 - **Việc còn treo của BE-004** (chuyển tiếp, không chặn BE-005): (1) chạy nốt `backfill_media` full 397 (đã verify 3 item thật end-to-end; resumable); (2) tạo bucket R2 + CDN khi lên prod.
 - **BE-005 đã ship trên branch** (contract v0.5.0): `POST /iap/verify-receipt`, `GET /iap/subscription-status` (app-tier), `POST /iap/webhook/apple|google` (signature-only), gate entitlement thật ở `download-url`. Entitlement account-less theo original transaction id; grace = còn quyền; adapter Apple/Google validate qua mock (live-store để staging).
-- **BE-008 đã ship trên branch** (contract v0.7.0): `GET /home` (app tier, bounded ≤10×10, trần áp lúc đọc, section rỗng không chiếm slot); `Collection.show_on_home`/`home_position` + index; `Wallpaper.description` thật (rỗng/whitespace → `null`); `PATCH /admin/wallpapers/{id}` chỉ sửa mô tả. **Đã sync mobile v0.7.0** — mobile **bắt buộc regenerate client** lần này vì đổi path + schema.
-- **Spec tiếp theo**: `BE-006-security-hardening` — rate limit, WAF, Sentry, load test, OWASP (IDOR ở download-url), + ClamAV (hoãn từ BE-004); rồi `BE-007-deploy-launch`.
+- **BE-008 đã ship trên branch** (contract v0.7.0 → **v0.7.1**): `GET /home` (app tier, bounded ≤10×10, trần áp lúc đọc, section rỗng không chiếm slot); `Collection.show_on_home`/`home_position` + index; `Wallpaper.description` thật (rỗng/whitespace → `null`); `PATCH /admin/wallpapers/{id}` chỉ sửa mô tả. Kèm **v0.7.1**: khai đúng `AdminWallpaper` (= `Wallpaper` + `status` + `failure_reason`) cho cả 3 verb `/admin/wallpapers` — sửa lệch contract có từ BE-004, **không đổi hành vi server**. **Đã sync mobile** cả hai bump; mobile phải regenerate cho v0.7.0 (đổi path+schema), riêng v0.7.1 thì không cần (chỉ admin tier).
+- **Spec tiếp theo**: `BE-006-security-hardening` — rate limit, WAF, Sentry, load test, OWASP (IDOR ở download-url), + ClamAV (hoãn từ BE-004). **Đã gánh thêm 2 nợ từ BE-008** (chi tiết ở `sdd-roadmap.md` §BE-006): (1) **N+1 `COUNT(*)`** còn ở `GET /wallpapers`, `/wallpapers/batch`, `/collections/{id}`, `/admin/wallpapers` — `/home` đã fix bằng prefetch-kèm-annotation, dùng làm khuôn; (2) ~~nợ contract `/admin/wallpapers`~~ → **đã fix ở BE-008 (contract v0.7.1)**, không còn là việc của BE-006. Sau đó là `BE-007-deploy-launch`.
 - **Quyết định kỹ thuật đã chốt** (ảnh hưởng schema DB):
   - Pagination: cursor-based (keyset), không dùng offset `page`/`page_size`.
   - Tag: curated — model `Tag` many-to-many với `Wallpaper`, admin chỉ chọn `tag_ids` có sẵn khi upload, tạo tag mới qua endpoint riêng `/admin/tags`.

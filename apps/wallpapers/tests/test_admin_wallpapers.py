@@ -302,3 +302,48 @@ def test_patch_requires_admin_tier(api):
     res = api.patch(f"/admin/wallpapers/{wallpaper.pk}", {"description": "x"}, format="json")
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "UNAUTHORIZED_ADMIN"
+
+
+# --- Contract shape: admin vs public tier (v0.7.1) ----------------------------
+
+# Đúng shape mà `AdminWallpaper` khai trong contract = Wallpaper (18) + 2 field vòng đời.
+_ADMIN_ONLY_FIELDS = {"status", "failure_reason"}
+
+
+def test_admin_payload_is_public_shape_plus_lifecycle_fields(admin_client, api):
+    """Contract khai `AdminWallpaper` = `Wallpaper` + status + failure_reason — khoá lại.
+
+    Lệch này từng tồn tại âm thầm từ BE-004 tới v0.7.0: contract khai `Wallpaper` còn
+    server trả thêm 2 field. Test so trực tiếp payload 2 tier nên lần sau ai thêm field
+    vào serializer admin mà quên cập nhật contract sẽ đỏ ngay.
+    """
+    wallpaper = WallpaperFactory()
+
+    admin_row = next(
+        row
+        for row in admin_client.get("/admin/wallpapers").json()["items"]
+        if row["id"] == wallpaper.pk
+    )
+    public_row = api.get(f"/wallpapers/{wallpaper.pk}").json()
+
+    assert set(admin_row) - set(public_row) == _ADMIN_ONLY_FIELDS
+    assert set(public_row) - set(admin_row) == set()
+
+
+def test_patch_response_uses_the_admin_shape(admin_client):
+    wallpaper = WallpaperFactory()
+    body = admin_client.patch(
+        f"/admin/wallpapers/{wallpaper.pk}", {"description": "x"}, format="json"
+    ).json()
+    assert set(body) >= _ADMIN_ONLY_FIELDS
+
+
+def test_lifecycle_fields_never_leak_to_the_app_tier(api):
+    """Public tier phải sạch: `failure_reason` có thể lộ chi tiết pipeline nội bộ."""
+    wallpaper = WallpaperFactory()
+    for payload in (
+        api.get(f"/wallpapers/{wallpaper.pk}").json(),
+        api.get("/wallpapers").json()["items"][0],
+        api.post("/wallpapers/batch", {"ids": [wallpaper.pk]}, format="json").json()[0],
+    ):
+        assert not (_ADMIN_ONLY_FIELDS & set(payload))
