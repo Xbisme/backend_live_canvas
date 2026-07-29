@@ -4,7 +4,9 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (`livecanvas-backend`, `livecanvas-mobile`). Khi API đổi, sửa cả `openapi.yaml` lẫn `api-context.md` ở repo đang implement, rồi copy nguyên văn sang repo còn lại (xem "Contract Sync" trong `dev-workflow.md`).
 >
-> Last updated: 2026-07-26 · Contract version: **`v0.5.0`**
+> Last updated: 2026-07-27 · Contract version: **`v0.6.0`**
+>
+> **Đổi so với v0.5.0 (mobile-driven, chờ backend implement)**: thêm field **`Wallpaper.description`** (`string`, nullable) cho mục "Mô tả" màn Wallpaper Detail (screen-inventory #7). ⚠️ **BACKEND CHƯA IMPLEMENT** — model/serializer/admin backend hiện chưa có field này (đã báo qua backend `.claude/sdd-roadmap.md` §New ask "Wallpaper.description"). Tới khi backend ship: mọi response trả `description: null`; client **ẩn mục "Mô tả" khi null**. Additive/nullable → tương thích ngược, không endpoint/error code mới. **Related wallpapers KHÔNG thêm endpoint** — client suy theo `GET /wallpapers?tags=<tag đầu tiên của wallpaper>` (loại chính nó, ≤6). Palette là suy diễn phía client, không cần backend.
 >
 > **Đổi so với v0.4.0 (BE-005)**: IAP verify + entitlement đi vào hoạt động thật. `GET /wallpapers/{id}/download-url` với wallpaper **premium** THÔI trả `402` vô điều kiện — nay kiểm tra entitlement thật từ `transaction_id` đã verify: entitled (`status ∈ {active, in_grace_period}`, chưa quá `expires_at`) → `200` presigned ≤5 phút; thiếu/hết hạn/không entitled → `402 ENTITLEMENT_REQUIRED`. Free giữ nguyên (bỏ qua `transaction_id`). Kích hoạt `POST /iap/verify-receipt`, `GET /iap/subscription-status`, `POST /iap/webhook/apple|google`. Entitlement **định danh theo original transaction id** (ổn định qua mọi kỳ renewal — mọi `transaction_id` trong chuỗi resolve về 1 entitlement); tắt auto-renew mà còn trong kỳ → `status=active, auto_renew=false`; `device_id` chỉ để phát hiện lạm dụng (restore trên máy mới tự do). **Không error code mới** (các mã IAP đã có sẵn trong catalog từ trước).
 >
@@ -147,6 +149,7 @@ Format chung:
     {
       "id": 101,
       "title": "Neon City Loop",
+      "description": null,
       "category": { "id": 3, "slug": "urban", "name": "Đô thị", "icon_url": "...", "wallpaper_count": 20 },
       "tags": [{ "id": 12, "slug": "neon", "name": "Neon", "wallpaper_count": 87 }],
       "orientation": "portrait",

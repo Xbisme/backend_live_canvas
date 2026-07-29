@@ -4,7 +4,12 @@
 >
 > **Vai trò file này**: pure planning cho track backend. Trạng thái hiện tại → [`project-context.md`](project-context.md). Ship history → [`changelog.md`](changelog.md).
 >
-> Last updated: 2026-07-26 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP đã implement trên branch** — contract **v0.5.0**, 196 tests xanh, chờ Contract Sync + merge · **spec tiếp theo: BE-006 Security Hardening**)
+> Last updated: 2026-07-27 (BE-001→BE-004 đã merge vào `main` · **BE-005 IAP đã implement trên branch** — 196 tests xanh, **Contract Sync v0.5.0 → mobile ĐÃ XONG**, chờ merge · contract hiện tại **v0.6.0** · **spec tiếp theo: BE-008 Mobile-Driven Content**, rồi mới BE-006 Security)
+>
+> 🆕 **2 ask từ mobile (2026-07-27) — đã gộp thành BE-008, chạy NGAY SAU BE-005**:
+> (1) `Wallpaper.description` (nullable) cho mục "Mô tả" màn Detail — contract đã khai trước ở **v0.6.0** cả 2 repo, backend trả `null` tới khi ship.
+> (2) Browse dạng **section curated có tiêu đề** — chốt **tái dùng `Collection`** (`show_on_home` + `home_position`) + endpoint `GET /home`, sẽ bump **v0.7.0**.
+> BE-006 Security lùi xuống sau BE-008 (**số spec là ID, không phải thứ tự thi công**).
 > Full requirements: `docs/PRD.md`
 >
 > **Quy ước flavor**: Toàn repo **chỉ có đúng 2 flavor**: `dev` và `prod` (production). KHÔNG có `staging` hay bất kỳ flavor nào khác. Mọi settings/env/CI/deploy đều bám theo đúng 2 flavor này.
@@ -56,6 +61,11 @@ BE-005: IAP Verify & Entitlement                  ⇄ Điểm đồng bộ: repo
  trên download-url)
     │
     ▼
+BE-008: Mobile-Driven Content  🔜 KẾ TIẾP        ⇄ Điểm đồng bộ: mobile đang chờ cả 2 —
+(Wallpaper.description + Browse sections              mục "Mô tả" ở Detail và Browse dạng
+ curated tái dùng Collection → GET /home)             section có tiêu đề (hiện là lưới phẳng)
+    │
+    ▼
 BE-006: Security Hardening & Production Readiness
 (Rate limit, WAF, audit log, Sentry, load test)
     │
@@ -63,6 +73,11 @@ BE-006: Security Hardening & Production Readiness
 BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo mobile chờ backend
 (Deploy flavor PROD, backup, runbook)                 production trước khi submit store (MO-006)
 ```
+
+> **Lưu ý thứ tự**: số spec là **ID, không phải thứ tự thi công**. BE-008 sinh sau nhưng chạy
+> **trước** BE-006/BE-007 (quyết định 2026-07-27 — mobile cần data, không đợi hết hardening).
+> Giữ nguyên số BE-006/BE-007 vì các spec đã merge (BE-002→005) + README đang tham chiếu
+> "ClamAV/rate-limit → BE-006", đổi số sẽ làm sai loạt tài liệu đã chốt.
 
 ---
 
@@ -119,12 +134,13 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 
 ### BE-005: IAP Verify & Entitlement
 
-- **Status**: 🟢 Implemented trên branch `BE-005-iap-verify-entitlement` (SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; **34/36 task xong, 196 tests xanh**, ruff/format sạch, không migration drift) — chờ Contract Sync sang mobile + review/merge
+- **Status**: 🟢 Implemented trên branch `BE-005-iap-verify-entitlement` (SDD trọn chuỗi specify→clarify→plan→tasks→analyze→implement; **35/36 task xong, 196 tests xanh**, ruff/format sạch, không migration drift) — **Contract Sync v0.5.0 → mobile đã xong (2026-07-26)**, chờ review/merge
 - **Branch**: `BE-005-iap-verify-entitlement`
 - **Depends on**: BE-003
 - **Scope**: `POST /iap/verify-receipt` (App Store Server API / Google Play Developer API); `POST /iap/webhook/apple` + `/google` (verify chữ ký JWS/Pub-Sub OIDC); `GET /iap/subscription-status`; hoàn thiện entitlement check thật ở `download-url`; presigned URL premium hết hạn ≤5 phút.
 - **Đã ship**: contract **v0.5.0** (download-url premium gate thật; IAP endpoints live; 0 error code mới); app `apps/iap` populated (models `SubscriptionEntitlement`/`EntitlementTransaction`/`StoreNotificationEvent`; services verify/is_entitled/resolve_status/apply_notification; store adapters Apple/Google isolate ở `stores/`); 4 endpoint (2 app-tier + 2 webhook signature-only qua `core.api.WebhookAPIView`); gate mở ở `apps/wallpapers` qua public `apps.iap.services.is_entitled`; audit sanitized. **Entitlement key = original transaction id** (ổn định qua renewal); grace/billing-retry = còn quyền; auto-renew off còn trong kỳ → active(auto_renew=false); không ràng device.
-- **Còn lại**: (1) **T002 Contract Sync v0.5.0 → mobile** (repo mobile không có trên máy khi implement — làm tay); (2) đấu nối credential store thật + verify end-to-end (adapter hiện validate qua mock; live-store để staging BE-006/7).
+- **✅ T002 Contract Sync v0.5.0 → mobile (2026-07-26)**: copy nguyên văn `openapi.yaml` (→ mobile `.claude/` + `contracts/`), `api-context.md`, `screen-inventory.md`; ghi entry "Contract Sync v0.5.0" vào mobile `changelog.md`; bump header mobile `project-context.md`/`sdd-roadmap.md`; sửa điểm đồng bộ **MO-006 từ BE-004 → BE-005** + thêm ràng buộc entitlement vào scope MO-006. Mobile **không cần regenerate** `packages/livecanvas_api` cho v0.5.0 (chỉ đổi mô tả/semantics, path+schema giữ nguyên; client sinh sẵn đã có `iapVerifyReceiptPost`, `iapSubscriptionStatusGet`, param `transactionId` optional ở `download-url`).
+- **Còn lại**: đấu nối credential store thật + verify end-to-end (adapter hiện validate qua mock; live-store để staging BE-006/7).
 - **⚠️ Điểm đồng bộ**: báo repo mobile khi merge — họ cần endpoint này hoạt động thật để test MO-005 end-to-end.
 
 ### BE-006: Security Hardening & Production Readiness
@@ -141,3 +157,37 @@ BE-007: Deploy & Launch Support                   ⇄ Điểm đồng bộ: repo
 - **Depends on**: BE-006
 - **Scope**: Deploy flavor `prod` lên hạ tầng production (build từ `config.settings.prod` + `.env.prod`), backup định kỳ, runbook vận hành. Không có bước staging riêng — verify trên flavor `dev` rồi promote thẳng lên `prod`.
 - **⚠️ Điểm đồng bộ**: báo repo mobile khi production sẵn sàng — họ cần trước khi submit store (MO-006).
+
+### BE-008: Mobile-Driven Content — Browse Sections + Wallpaper Description 🔜 KẾ TIẾP
+
+- **Status**: ⬜ Not started — **chạy ngay sau khi merge BE-005, TRƯỚC BE-006** (quyết định project lead 2026-07-27: mobile đang thiếu data để bám prototype, không đợi hết hardening).
+- **Branch**: `BE-008-mobile-driven-content`
+- **Depends on**: BE-003 (models Wallpaper/Collection), BE-004 (admin CRUD + storage). **Không** phụ thuộc BE-005.
+- **Nguồn**: 2 ask từ repo mobile (design pass MO-004, 2026-07-27) — gộp 1 spec vì cùng chạm `apps/wallpapers`, cùng 1 lần bump contract + 1 lần sync mobile:
+  1. **`Wallpaper.description`** — màn Wallpaper Detail (screen-inventory #7) có mục "Mô tả" nhưng schema không có field. Contract đã **khai báo trước ở v0.6.0** (`string`, nullable) ở cả 2 repo, backend đang trả `null`.
+  2. **Browse sections** — prototype Browse là các **section curated có tiêu đề**, API hiện chỉ có lưới cursor phẳng + tag chips → mobile đang giữ lưới phẳng, lệch design.
+
+- **Quyết định đã chốt (2026-07-27, project lead)**:
+  - Section = **curated tay, TÁI DÙNG `Collection`** — KHÔNG thêm model `Section`/`HomeSection` mới. `Collection` đã có m2m **có thứ tự**, `cover_url`, `accent_color`, `is_premium`, `title`, `author` → đủ dựng section.
+  - Gộp chung 1 spec với `description` (thay vì tách 2 spec) → 1 lần bump contract, 1 lần Contract Sync, 1 PR.
+
+- **Scope — phần A: `description`** (contract-first: screen-inventory→openapi→api-context **đã sync sẵn v0.6.0**, không phải bump lại cho phần này):
+  - `apps/wallpapers/models.py` (`Wallpaper` ~line 76): thêm `description` + **migration** (`makemigrations --check` là gate).
+    - ⚠️ **Chốt khi plan**: contract khai `nullable` → dùng `TextField(null=True, blank=True)` cho khớp thẳng, hoặc `default=""` rồi serializer map `""` → `null`. Đừng để lọt chuỗi rỗng ra API (mobile ẩn mục theo `null`, không theo `""`).
+  - `apps/wallpapers/serializers.py` `WallpaperSerializer.Meta.fields` (~line 84–102): thêm `description` (public read — list/detail/batch).
+  - `apps/wallpapers/admin_serializers.py` `AdminWallpaperCreateSerializer` (~line 15): thêm `description` (admin write); cân nhắc bổ sung `PATCH /admin/wallpapers/{id}` để sửa mô tả sau (hiện admin wallpaper chỉ create+list) — nếu thêm thì phải vào contract.
+  - Seed/factory (`data/`, factories): thêm mô tả mẫu để test end-to-end.
+
+- **Scope — phần B: Browse sections (`GET /home`)** — phần này **bump contract lên `v0.7.0`**, theo đúng thứ tự screen-inventory → openapi + api-context → code → sync mobile:
+  - `apps/wallpapers/models.py` (`Collection`): thêm `show_on_home: bool` (default `False`) + `home_position: int` (thứ tự hiện trên Browse) + migration. Index theo `(show_on_home, home_position)`.
+  - Endpoint public mới **`GET /home`** (app tier, `X-App-Key`), **KHÔNG phân trang** — cùng nhóm bounded như `/categories`, `/tags`, `/collections`:
+    - Trả `{ "sections": [{ key, title, collection_id, cover_url, accent_color, is_premium, items: Wallpaper[] }] }`, chỉ gồm collection có `show_on_home=True`, sắp theo `home_position`.
+    - **Bounded ≤10 wallpaper/section** (mặc định đề xuất, chốt khi plan); "Xem tất cả" ở client → nhảy sang `GET /collections/{id}` đã có, không cần cursor trong section.
+    - Query phải `prefetch_related` items + tags/category để tránh N+1 (đây là màn đầu tiên app gọi, nhạy latency nhất).
+  - Admin: `POST/PATCH /admin/collections` nhận `show_on_home` + `home_position`; ghi `audit` như các thao tác curated khác.
+  - **Không** ràng buộc entitlement mới: section premium chỉ hiển thị badge, gate thật vẫn duy nhất ở `download-url`.
+  - **Trộn với tag chips** (chốt khi plan, đề xuất): Browse hiện section khi chip = "Tất cả"; chọn tag bất kỳ → về lưới phẳng `GET /wallpapers?tags=` như hiện tại.
+
+- **Definition of done**: `GET /wallpapers/{id}` trả `description` thật; `POST /admin/wallpapers` nhận `description`; `GET /home` trả section theo thứ tự admin sắp; contract bump **v0.7.0** + **Contract Sync sang mobile** (3 file + entry changelog); ruff + pytest + `makemigrations --check` xanh; báo mobile để họ regenerate `packages/livecanvas_api` (v0.7.0 **có** thay đổi schema/path → lần này **bắt buộc** regenerate, khác v0.5.0) rồi bật mục "Mô tả" + dựng Browse dạng section.
+- **Ghi chú related-wallpapers**: mobile tự suy "hình nền liên quan" qua `GET /wallpapers?tags=<tag đầu>` (đã có) — **KHÔNG cần** endpoint related riêng. Muốn "related" theo độ tương đồng thật thì mở spec riêng sau.
+- **Ngoài phạm vi**: model `Section`/`HomeSection` riêng, section suy diễn tự động (trending/mới nhất theo thuật toán), personalization. Nếu sau muốn trộn section auto + curated thì mới cần resource riêng — hiện chốt curated tay.

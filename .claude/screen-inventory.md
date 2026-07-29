@@ -4,7 +4,9 @@
 >
 > File này tồn tại độc lập ở CẢ 2 REPO (đồng bộ tay giống `api-context.md`).
 >
-> Last updated: 2026-07-26 · Contract version tương ứng: `v0.5.0`
+> Last updated: 2026-07-27 · Contract version tương ứng: `v0.6.0`
+>
+> **v0.6.0 (mobile-driven)**: màn #7 Wallpaper Detail cần thêm **`description`** (mô tả ngắn của wallpaper) cho mục "Mô tả" + mục **"Hình nền liên quan"** (suy theo tag đầu tiên, không endpoint riêng). `description` là field MỚI trên `Wallpaper` — **backend chưa implement**, đã báo qua backend roadmap.
 
 ---
 
@@ -18,7 +20,7 @@
 | 4 | **Tag Filter Chips** (dùng ở Browse/Search) | Danh sách tag có sẵn (curated), **có chip "All" (Tất cả) đứng đầu, chọn mặc định** | Chọn "All" = bỏ mọi filter tag (lấy toàn bộ, mới→cũ); chọn/bỏ chọn tag khác | `GET /tags` |
 | 5 | **Collections** (tab "Bộ sưu tập", list cover card) | Mỗi collection: cover_url, title, author, wallpaper_count, is_premium — danh sách nhỏ curated | Tap → Collection Detail | `GET /collections` |
 | 6 | **Collection Detail** (1 bộ sưu tập curated) | Meta collection (cover_url, accent_color, title, author, description, is_premium, wallpaper_count) + **danh sách wallpaper thuộc bộ** (đúng thứ tự curate) | Tap wallpaper → Detail, Favorite toggle, "Tải tất cả", "Mở khoá bộ sưu tập" nếu premium & chưa mua | `GET /collections/{id}` |
-| 7 | **Wallpaper Detail** | Full info + preview_video_url, license info, danh sách tag đầy đủ, **(các) bộ sưu tập chứa wallpaper này** (để nhảy tới Collection Detail) | Play preview, Favorite toggle, Tải/Set (trigger download-url), Mua nếu premium, tap "Từ bộ sưu tập ·…" → Collection Detail | `GET /wallpapers/{id}`, `GET /wallpapers/{id}/download-url` |
+| 7 | **Wallpaper Detail** | Full info + preview_video_url, **`description` (mô tả — v0.6.0, backend chưa có)**, license info, danh sách tag đầy đủ, stats (download_count/like_count/resolution), **(các) bộ sưu tập chứa wallpaper này** (để nhảy tới Collection Detail) + **hình nền liên quan** (suy theo tag đầu tiên) | Play preview, Favorite toggle, Tải/Set (trigger download-url), Mua nếu premium, tap "Từ bộ sưu tập ·…" → Collection Detail, tap hình liên quan → Detail khác | `GET /wallpapers/{id}`, `GET /wallpapers/{id}/download-url`, `GET /wallpapers?tags=<tag>` (liên quan) |
 | 8 | **Favorites** | List wallpaper đã lưu local (theo ID) — cần fetch lại data mới nhất mỗi lần mở | Bỏ favorite, tap → Detail | `POST /wallpapers/batch` |
 | 9 | **Paywall/Premium** | Danh sách gói (giá lấy từ Store, KHÔNG từ backend) + trạng thái subscription hiện tại (nếu đã có `transaction_id` lưu local) | Mua, Restore purchase, gửi receipt verify, kiểm tra lại trạng thái khi mở màn | `POST /iap/verify-receipt`, `GET /iap/subscription-status` |
 | 10 | **Set Wallpaper Confirm** (Android) / **Hướng dẫn Shortcuts** (iOS) | Không cần thêm API — dùng `download_url` đã có từ Detail | Native action | — |

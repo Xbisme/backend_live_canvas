@@ -28,7 +28,15 @@ info:
     `POST /iap/webhook/apple|google`. Entitlement định danh theo original transaction
     id (ổn định qua renewal); `in_grace_period` được coi là còn quyền; tắt auto-renew
     mà còn trong kỳ → status=active, auto_renew=false. Không error code mới.
-  version: "0.5.0"
+
+    v0.6.0 (mobile-driven, chờ backend implement): thêm field `Wallpaper.description`
+    (string, nullable) cho mục "Mô tả" màn Wallpaper Detail — screen-inventory hàng #7.
+    ⚠️ BACKEND CHƯA IMPLEMENT: model/serializer/admin của backend hiện chưa có field
+    này (xem backend `.claude/sdd-roadmap.md` §New ask). Cho tới khi backend ship, mọi
+    response trả `description: null`; client ẩn mục "Mô tả" khi null. Additive/nullable
+    nên tương thích ngược. Không endpoint/error code mới. Related-wallpapers KHÔNG thêm
+    endpoint — client suy theo `GET /wallpapers?tags=<tag đầu>` (đã có).
+  version: "0.6.0"
 
 servers:
   - url: https://api.example.com/v1
@@ -116,6 +124,13 @@ components:
       properties:
         id: { type: integer }
         title: { type: string }
+        description:
+          type: string
+          nullable: true
+          description: >
+            (v0.6.0) Mô tả ngắn của wallpaper — hiển thị ở mục "Mô tả" màn
+            Wallpaper Detail. Nullable; BACKEND CHƯA IMPLEMENT (trả null tới khi
+            ship — xem info.description v0.6.0). Client ẩn mục khi null.
         category: { $ref: '#/components/schemas/Category' }
         tags:
           type: array
